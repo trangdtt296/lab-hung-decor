@@ -84,7 +84,7 @@ export function useEmployeePayslip(token) {
     setIsExportingExcel(true);
     try {
       const fileName = await exportEmployeeExcel(data.employee, selectedMonth, data.attendance, data.advances, data.expenses);
-      showToast(`Đã tải xuống ${fileName}`);
+      if (fileName) showToast(`Đã tải xuống ${fileName}`); // null = hộp "Lưu / Chia sẻ file" đang mở
     } catch (err) {
       console.error(err);
       showToast('Có lỗi khi xuất Excel, vui lòng thử lại!', 'error');

@@ -426,7 +426,7 @@ export function usePayrollData() {
       setIsExportingExcel(true);
       try {
         const fileName = await task();
-        showToast(`Đã tải xuống ${fileName}`);
+        if (fileName) showToast(`Đã tải xuống ${fileName}`); // null = hộp "Lưu / Chia sẻ file" đang mở
       } catch (err) {
         console.error(err);
         showToast(errorMessage, 'error');

@@ -156,7 +156,7 @@ export default function PayrollTab({
                     </div>
                   </div>
                   <div className="bg-amber-50/70 px-2.5 py-2 rounded-xl flex items-center justify-between sm:block">
-                    <div className="text-amber-700">Ứng + khấu trừ</div>
+                    <div className="text-amber-700">Ứng + Tiền ảnh</div>
                     <div className="font-bold text-amber-800 tabular-nums whitespace-nowrap">
                       -{formatVND(row.totalAdvances + row.totalPhotoFee + row.totalOtherDeductions)}
                     </div>

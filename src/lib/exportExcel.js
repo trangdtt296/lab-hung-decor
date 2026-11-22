@@ -21,6 +21,7 @@ import {
   STANDARD_WORK_DAYS,
   NET_SALARY_ROUNDING,
 } from './payroll';
+import { isInAppBrowser, offerFile, triggerBlobDownload } from './inAppBrowser';
 
 /* --------------------------------- Bố cục --------------------------------- */
 
@@ -480,16 +481,20 @@ export const buildWorkshopWorkbook = (ExcelJS, monthKeys, employees, attendance,
 
 const loadExcelJS = async () => (await import('exceljs')).default;
 
+/**
+ * Tải file về máy. Trong trình duyệt nhúng (Zalo, Facebook...) thì không tải thẳng mà đưa file cho
+ * InAppBrowserHelper hiện nút "Lưu / Chia sẻ file".
+ * @returns {Promise<boolean>} true nếu đã tải thẳng, false nếu đang chờ người dùng bấm lưu
+ */
 const downloadWorkbook = async (wb, fileName) => {
   const buffer = await wb.xlsx.writeBuffer();
-  const url = URL.createObjectURL(new Blob([buffer], { type: XLSX_MIME }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const blob = new Blob([buffer], { type: XLSX_MIME });
+  if (isInAppBrowser()) {
+    offerFile(blob, fileName);
+    return false;
+  }
+  triggerBlobDownload(blob, fileName);
+  return true;
 };
 
 /** Các tháng sẽ xuất ở chế độ "tất cả": tháng có dữ liệu trong cùng năm, tới tháng đang chọn */
@@ -508,8 +513,8 @@ export const exportWorkshopExcel = async (mode, selectedMonth, employees, attend
   const fileName = mode === 'all'
     ? `Bang_Luong_Lab_Hung_Decor_${year}.xlsx`
     : `Bang_Luong_Lab_Hung_Decor_Thang_${month}_${year}.xlsx`;
-  await downloadWorkbook(wb, fileName);
-  return fileName;
+  const downloaded = await downloadWorkbook(wb, fileName);
+  return downloaded ? fileName : null; // null = đang chờ người dùng bấm lưu (trình duyệt nhúng)
 };
 
 /** Xuất bảng lương cá nhân: các tháng có dữ liệu của nhân viên trong năm, tới tháng đang chọn */
@@ -525,6 +530,6 @@ export const exportEmployeeExcel = async (emp, selectedMonth, attendance, advanc
   const ExcelJS = await loadExcelJS();
   const wb = buildEmployeeWorkbook(ExcelJS, emp, monthKeys, attendance, advances, expenses);
   const fileName = `${toPlainAsciiName(emp.name)}_Bang_Luong_${parseMonthKey(selectedMonth).year}.xlsx`;
-  await downloadWorkbook(wb, fileName);
-  return fileName;
+  const downloaded = await downloadWorkbook(wb, fileName);
+  return downloaded ? fileName : null;
 };

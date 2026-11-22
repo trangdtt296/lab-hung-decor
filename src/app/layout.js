@@ -1,4 +1,5 @@
 import "./globals.css";
+import InAppBrowserHelper from "../components/common/InAppBrowserHelper";
 
 export const metadata = {
   title: "Lab Hung Decor - Quản lý nhân sự & Bảng lương",
@@ -15,7 +16,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="vi" className="h-full">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <InAppBrowserHelper />
+        {children}
+      </body>
     </html>
   );
 }
