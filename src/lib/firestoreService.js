@@ -87,6 +87,16 @@ export const saveEmployeeDoc = async (emp) => {
   });
 };
 
+/** Cho nghỉ (active: false, nghỉ từ tháng inactiveFrom) hoặc khôi phục (active: true) */
+export const updateEmployeeStatusDoc = async (empId, active, inactiveFrom = null) => {
+  if (!isFirebaseConfigured || !firebaseDb) return;
+  await updateDoc(doc(firebaseDb, 'employees', empId), {
+    active,
+    inactiveFrom: active ? null : inactiveFrom,
+    updatedAt: serverTimestamp(),
+  });
+};
+
 export const updateEmployeeSlugDoc = async (empId, slug) => {
   if (!isFirebaseConfigured || !firebaseDb) return;
   await updateDoc(doc(firebaseDb, 'employees', empId), {
@@ -112,3 +122,32 @@ export const updateEmployeeSalaryDoc = async (empId, monthKey, salary, currentBa
   );
 };
 
+
+/**
+ * Ghi dữ liệu cũ đọc từ file Excel (xem legacyImport.js). Chỉ dùng qua LegacyImportPanel,
+ * panel này ẩn/hiện bằng cờ settings/app.legacyImportEnabled trên Firestore.
+ * Chia nhiều batch vì Firestore giới hạn 500 thao tác / batch.
+ */
+export const importLegacyDataDocs = async ({ employees, attendance, advances, expenses }) => {
+  if (!isFirebaseConfigured || !firebaseDb) throw new Error('Chưa cấu hình Firebase');
+  const now = serverTimestamp();
+  const ops = [
+    ...employees.map((e) => ['employees', e.id, { ...e, createdAt: now }]),
+    ...Object.entries(attendance).flatMap(([monthKey, byEmp]) => {
+      const [year, month] = monthKey.split('-').map(Number);
+      return Object.entries(byEmp).map(([empId, days]) => [
+        'attendance',
+        `${empId}_${monthKey}`,
+        { employeeId: empId, monthKey, year, month, days, updatedAt: now },
+      ]);
+    }),
+    ...advances.map((a) => ['advances', a.id, { ...a, createdAt: now }]),
+    ...expenses.map((x) => ['expenses', x.id, { ...x, createdAt: now }]),
+  ];
+  for (let i = 0; i < ops.length; i += 450) {
+    const batch = writeBatch(firebaseDb);
+    ops.slice(i, i + 450).forEach(([col, id, data]) => batch.set(doc(firebaseDb, col, id), data));
+    await batch.commit();
+  }
+  return ops.length;
+};

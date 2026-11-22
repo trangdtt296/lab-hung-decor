@@ -2,7 +2,7 @@
 
 import React, { Suspense, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, Copy, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download } from 'lucide-react';
 import { useEmployeePayslip } from '../../../hooks/useEmployeePayslip';
 import EmployeeView from '../../../components/employee/EmployeeView';
 import EmployeeAvatar from '../../../components/common/EmployeeAvatar';
@@ -95,7 +95,7 @@ function EmployeeContent({ params }) {
                 label={isCopied ? 'Đã copy!' : 'Copy link'}
                 onClick={copyLink}
               />
-              <HeaderButton icon={FileSpreadsheet} label="Xuất Excel" disabled={isExportingExcel} onClick={exportExcel} />
+              <HeaderButton icon={Download} label="Xuất Excel" disabled={isExportingExcel} onClick={exportExcel} />
             </>
           )
         }

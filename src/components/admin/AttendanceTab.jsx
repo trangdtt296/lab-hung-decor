@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, CheckCheck } from 'lucide-react';
+import { ChevronDown, CheckCheck, UserMinus, UserPlus, RotateCcw } from 'lucide-react';
 import { formatVND, compareWithToday, toMonthKey } from '../../lib/payroll';
 import { useTodayInfo } from '../../hooks/useTodayInfo';
 import EditPastAttendanceModal from '../modals/EditPastAttendanceModal';
 import EmployeeAvatar from '../common/EmployeeAvatar';
+import LeaveEmployeeModal from '../modals/LeaveEmployeeModal';
 import { AttendanceCalendar, AttendanceDayCell, AttendanceLegend } from '../attendance/AttendanceUI';
 
 export default function AttendanceTab({
@@ -14,13 +15,17 @@ export default function AttendanceTab({
   calendarCells,
   selectedMonthDisplayLabel,
   selectedMonth,
+  inactiveEmployees = [],
   onToggleAttendance,
   onSetAttendanceValue,
   onQuickMarkAllToday,
+  onOpenAddEmployee,
+  onSetEmployeeActive,
 }) {
   const todayInfo = useTodayInfo();
   const [expandedEmpId, setExpandedEmpId] = useState(monthPayrollSummary[0]?.employee?.id ?? null);
   const [editingPastTarget, setEditingPastTarget] = useState(null);
+  const [leavingEmployee, setLeavingEmployee] = useState(null);
 
   const isCurrentMonth = todayInfo && toMonthKey(todayInfo.year, todayInfo.month) === selectedMonth;
 
@@ -42,6 +47,27 @@ export default function AttendanceTab({
     });
   };
 
+  /**
+   * Nút "Cho nghỉ việc": chỉ hiện với nhân viên đang làm và CHƯA có ngày công nào trong tháng
+   * (tính tới hôm nay). Người đã có công thì giữ trong bảng để tính lương tháng này.
+   */
+  const canLeave = (row) => row.employee.active !== false && row.totalDays === 0;
+  const leaveButton = (emp, label = 'Cho nghỉ việc') => (
+    <button
+      type="button"
+      onClick={() => setLeavingEmployee(emp)}
+      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold whitespace-nowrap cursor-pointer shrink-0"
+    >
+      <UserMinus className="w-3.5 h-3.5" />
+      {label}
+    </button>
+  );
+  const leftBadge = (
+    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5 shrink-0">
+      Đã nghỉ
+    </span>
+  );
+
   return (
     <div className="space-y-3">
       <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
@@ -52,17 +78,33 @@ export default function AttendanceTab({
           </h2>
           <AttendanceLegend showEditHints />
         </div>
-        {isCurrentMonth && (
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => onQuickMarkAllToday(todayInfo.day)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap"
+            onClick={onOpenAddEmployee}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap"
           >
-            <CheckCheck className="w-4 h-4" />
-            Chấm đủ hôm nay cho cả xưởng
+            <UserPlus className="w-4 h-4" />
+            Thêm nhân viên
           </button>
-        )}
+          {isCurrentMonth && monthPayrollSummary.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onQuickMarkAllToday(todayInfo.day)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap"
+            >
+              <CheckCheck className="w-4 h-4" />
+              Chấm đủ hôm nay cho cả xưởng
+            </button>
+          )}
+        </div>
       </div>
+
+      {monthPayrollSummary.length === 0 && (
+        <div className="bg-white rounded-2xl p-8 text-center text-xs text-slate-500 border border-slate-200">
+          Chưa có nhân viên nào trong {selectedMonthDisplayLabel}. Bấm <strong>Thêm nhân viên</strong> để bắt đầu chấm công.
+        </div>
+      )}
 
       {/* Mobile: thẻ thu gọn, mở ra lịch 7 cột */}
       <div className="md:hidden flex flex-col gap-2.5">
@@ -71,11 +113,12 @@ export default function AttendanceTab({
           const isExpanded = expandedEmpId === emp.id;
           return (
             <div key={emp.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="flex items-center gap-2 pr-3">
               <button
                 type="button"
                 onClick={() => setExpandedEmpId(isExpanded ? null : emp.id)}
                 aria-expanded={isExpanded}
-                className="w-full p-3.5 flex items-center justify-between gap-2 text-left cursor-pointer"
+                className="flex-1 min-w-0 p-3.5 flex items-center justify-between gap-2 text-left cursor-pointer"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <EmployeeAvatar name={emp.name} size="sm" />
@@ -91,6 +134,9 @@ export default function AttendanceTab({
                   className={`w-5 h-5 text-slate-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                 />
               </button>
+                {canLeave(row) && leaveButton(emp, 'Cho nghỉ')}
+                {emp.active === false && leftBadge}
+              </div>
 
               {isExpanded && (
                 <div className="px-3 pb-3.5 pt-2.5 border-t border-slate-100">
@@ -109,7 +155,7 @@ export default function AttendanceTab({
       </div>
 
       {/* Desktop: ma trận nhân viên × ngày giống file Excel, cuộn ngang trong khung */}
-      <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className={`${monthPayrollSummary.length ? 'md:block' : ''} hidden bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden`}>
         <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-0 text-xs">
             <thead>
@@ -141,7 +187,7 @@ export default function AttendanceTab({
                     <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 px-3 py-1.5 border-b border-r border-slate-100">
                       <div className="flex items-center gap-2">
                         <EmployeeAvatar name={emp.name} size="xs" />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="font-extrabold text-slate-900 truncate">{emp.name}</div>
                           <div className="text-[11px] tabular-nums whitespace-nowrap">
                             <strong className="text-emerald-700">{row.totalDays} công</strong>
@@ -149,6 +195,8 @@ export default function AttendanceTab({
                             <strong className="text-slate-700">{formatVND(row.netSalary)}</strong>
                           </div>
                         </div>
+                        {canLeave(row) && leaveButton(emp, 'Cho nghỉ')}
+                        {emp.active === false && leftBadge}
                       </div>
                     </td>
                     {currentMonthDays.map((d) => (
@@ -171,6 +219,45 @@ export default function AttendanceTab({
           </table>
         </div>
       </div>
+
+      {inactiveEmployees.length > 0 && (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-xs px-3.5 py-3 text-xs">
+          <h3 className="font-bold text-slate-600">
+            Nhân viên đã nghỉ ({inactiveEmployees.length}){' '}
+            <span className="font-normal text-slate-400">— đi làm lại thì bấm để đưa về bảng chấm công</span>
+          </h3>
+          <ul className="mt-2.5 divide-y divide-slate-100">
+            {inactiveEmployees.map((emp) => (
+              <li key={emp.id} className="flex items-center justify-between gap-2 py-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <EmployeeAvatar name={emp.name} size="xs" />
+                  <span className="font-bold text-slate-800 truncate">{emp.name}</span>
+                  {emp.inactiveFrom && (
+                    <span className="text-slate-400 whitespace-nowrap">nghỉ từ T{Number(emp.inactiveFrom.slice(5))}/{emp.inactiveFrom.slice(0, 4)}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSetEmployeeActive(emp.id, true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold cursor-pointer whitespace-nowrap"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Đi làm lại
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {leavingEmployee && (
+        <LeaveEmployeeModal
+          employee={leavingEmployee}
+          monthLabel={selectedMonthDisplayLabel}
+          onClose={() => setLeavingEmployee(null)}
+          onConfirm={() => onSetEmployeeActive(leavingEmployee.id, false)}
+        />
+      )}
 
       <EditPastAttendanceModal
         isOpen={Boolean(editingPastTarget)}

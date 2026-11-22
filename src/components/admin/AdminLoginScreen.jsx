@@ -59,7 +59,7 @@ export default function AdminLoginScreen({ onLogin }) {
               htmlFor="admin-login-email"
               className="block text-xs font-bold text-slate-700 mb-1.5"
             >
-              Email Admin
+              Email
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -67,7 +67,7 @@ export default function AdminLoginScreen({ onLogin }) {
                 id="admin-login-email"
                 type="email"
                 autoComplete="email"
-                placeholder="email@vidu.com"
+                placeholder="Nhập email"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);

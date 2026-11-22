@@ -116,6 +116,7 @@ export default function EmployeeView({ payroll, selectedMonth, currentMonthDays,
 
         <LineItems title="Khấu trừ ứng lương" items={payroll.empAdvances} tone="amber" sign="-" describe={(x) => x.date} />
         <LineItems title="Khấu trừ tiền ảnh" items={payroll.empPhotoFees} tone="rose" sign="-" describe={(x) => x.date} />
+        <LineItems title="Khoản trừ khác" items={payroll.empOtherDeductions} tone="rose" sign="-" describe={(x) => x.date} />
         <LineItems
           title="Cộng chi tiêu đã chi hộ xưởng"
           items={payroll.empReimbursements}

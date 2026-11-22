@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import {
-  FileSpreadsheet,
-  Plus,
+  Download,
   Check,
   Copy,
   ExternalLink,
@@ -22,7 +21,6 @@ export default function PayrollTab({
   copiedEmpId,
   isExportingExcel,
   onOpenExportAllModal,
-  onOpenAddStaffModal,
   onCopyLink,
   onExportEmployeeExcel,
   onRegenerateSlug,
@@ -53,16 +51,8 @@ export default function PayrollTab({
             onClick={onOpenExportAllModal}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer"
           >
-            <FileSpreadsheet className="w-4 h-4 shrink-0" />
+            <Download className="w-4 h-4 shrink-0" />
             <span>Xuất Excel</span>
-          </button>
-          <button
-            type="button"
-            onClick={onOpenAddStaffModal}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer transition-colors"
-          >
-            <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
-            <span>Thêm nhân viên</span>
           </button>
         </div>
       </div>
@@ -166,9 +156,9 @@ export default function PayrollTab({
                     </div>
                   </div>
                   <div className="bg-amber-50/70 px-2.5 py-2 rounded-xl flex items-center justify-between sm:block">
-                    <div className="text-amber-700">Ứng + Ảnh</div>
+                    <div className="text-amber-700">Ứng + khấu trừ</div>
                     <div className="font-bold text-amber-800 tabular-nums whitespace-nowrap">
-                      -{formatVND(row.totalAdvances + row.totalPhotoFee)}
+                      -{formatVND(row.totalAdvances + row.totalPhotoFee + row.totalOtherDeductions)}
                     </div>
                   </div>
                   <div className="bg-sky-50/70 px-2.5 py-2 rounded-xl flex items-center justify-between sm:block">
@@ -205,7 +195,7 @@ export default function PayrollTab({
                   onClick={() => onExportEmployeeExcel(row.employee)}
                   className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold whitespace-nowrap disabled:opacity-60 cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                  <Download className="w-3.5 h-3.5 shrink-0" />
                   <span>Xuất Excel</span>
                 </button>
 

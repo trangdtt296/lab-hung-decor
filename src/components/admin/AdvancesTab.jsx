@@ -8,6 +8,7 @@ import ConfirmButton from '../common/ConfirmButton';
 const TYPE_BADGE = {
   advance: { label: 'Ứng lương', className: 'bg-amber-100 text-amber-800' },
   photo_fee: { label: 'Tiền ảnh', className: 'bg-rose-100 text-rose-800' },
+  other_deduction: { label: 'Khoản trừ khác', className: 'bg-slate-200 text-slate-800' },
 };
 
 export default function AdvancesTab({ advances, employees, selectedMonth, totalAdvances, onOpenAddAdvance, onDeleteAdvance }) {

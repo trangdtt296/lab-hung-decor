@@ -9,7 +9,7 @@ import {
   reauthenticateWithCredential,
   updatePassword,
 } from 'firebase/auth';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { firebaseAuth, firebaseDb, isFirebaseConfigured } from '../lib/firebase';
 import {
   STANDARD_WORK_DAYS,
@@ -21,6 +21,7 @@ import {
   parseMoneyInput,
   calculateEmployeeMonthPayroll,
   latestBaseSalary,
+  isEmployeeInMonth,
 } from '../lib/payroll';
 import {
   saveAttendanceDoc,
@@ -31,12 +32,15 @@ import {
   deleteExpenseDoc,
   saveEmployeeDoc,
   updateEmployeeSlugDoc,
+  updateEmployeeStatusDoc,
   updateEmployeeSalaryDoc,
+  importLegacyDataDocs,
 } from '../lib/firestoreService';
 import { exportWorkshopExcel, exportEmployeeExcel, getExportMonthKeys } from '../lib/exportExcel';
 import { useToast } from './useToast';
 
 const NEXT_ATTENDANCE_VALUE = { 0: 1, 1: 0.5, 0.5: 0 };
+const ADVANCE_TYPE_LABEL = { advance: 'Ứng lương', photo_fee: 'Tiền ảnh', other_deduction: 'Khoản trừ khác' };
 const ATTENDANCE_LABEL = { 1: '1 công (+)', 0.5: '0.5 công (-)', 0: 'Nghỉ (•)' };
 
 const COLLECTIONS = ['employees', 'attendance', 'advances', 'expenses'];
@@ -71,9 +75,6 @@ export function usePayrollData() {
   // Chưa cấu hình Firebase thì không có gì để chờ (trang hiển thị lỗi cấu hình).
   const [isAuthReady, setIsAuthReady] = useState(!isFirebaseConfigured);
   const [loadedCollections, setLoadedCollections] = useState(() => new Set());
-  const [cloudSyncStatus, setCloudSyncStatus] = useState(
-    isFirebaseConfigured ? 'Đã kết nối Firebase' : 'Chưa cấu hình Firebase'
-  );
 
   const [employees, setEmployees] = useState([]);
   // Giá trị cố định cho prerender; đổi sang tháng hiện tại ngay khi chạy trên client
@@ -81,6 +82,11 @@ export function usePayrollData() {
   const [attendance, setAttendance] = useState({});
   const [advances, setAdvances] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  // Cờ tính năng trên Firestore: settings/app.legacyImportEnabled (bật/tắt trong Firebase Console)
+  const [featureFlags, setFeatureFlags] = useState({});
+
+  /** Nhân viên đang làm — dùng cho các ô chọn khi nhập liệu mới */
+  const activeEmployees = useMemo(() => employees.filter((e) => e.active !== false), [employees]);
 
   const { toast, showToast } = useToast();
   const [copiedEmpId, setCopiedEmpId] = useState(null);
@@ -125,7 +131,8 @@ export function usePayrollData() {
 
     const LABELS = { employees: 'nhân sự', attendance: 'chấm công', advances: 'ứng lương', expenses: 'chi tiêu' };
     const handlers = {
-      employees: (docs) => setEmployees(sortEmployees(docs.filter((item) => item.active !== false))),
+      // Giữ cả nhân viên đã nghỉ để bảng lương các tháng cũ vẫn đầy đủ
+      employees: (docs) => setEmployees(sortEmployees(docs)),
       attendance: (docs) => setAttendance(groupAttendanceDocs(docs)),
       advances: setAdvances,
       expenses: setExpenses,
@@ -143,13 +150,21 @@ export function usePayrollData() {
           (err) => {
             console.error(err);
             markLoaded(name); // không treo màn hình tải, nhưng báo lỗi rõ ràng
-            setCloudSyncStatus(`Lỗi tải dữ liệu ${LABELS[name]} từ Firestore`);
             showToast(`Không tải được dữ liệu ${LABELS[name]}. Kiểm tra mạng hoặc quyền truy cập.`, 'error');
           }
         )
     );
+    // Cờ tính năng: thiếu document / lỗi quyền → coi như tắt hết, không ảnh hưởng phần còn lại
+    unsubs.push(
+      onSnapshot(
+        doc(firebaseDb, 'settings', 'app'),
+        (snap) => setFeatureFlags(snap.exists() ? snap.data() : {}),
+        () => setFeatureFlags({})
+      )
+    );
     return () => {
       unsubs.forEach((unsub) => unsub());
+      setFeatureFlags({});
       setEmployees([]);
       setAttendance({});
       setAdvances([]);
@@ -195,16 +210,16 @@ export function usePayrollData() {
   const quickMarkAllToday = useCallback(
     async (day = new Date().getDate()) => {
       const nextMonthMap = { ...(attendance[selectedMonth] || {}) };
-      employees.forEach((emp) => {
+      activeEmployees.forEach((emp) => {
         nextMonthMap[emp.id] = { ...(nextMonthMap[emp.id] || {}), [day]: 1 };
       });
       setAttendance((prev) => ({ ...prev, [selectedMonth]: nextMonthMap }));
       await persist(
-        () => saveBatchAttendanceDoc(selectedMonth, nextMonthMap, employees),
+        () => saveBatchAttendanceDoc(selectedMonth, nextMonthMap, activeEmployees),
         `Đã chấm 1 công ngày ${day}/${selectedMonth.split('-')[1]} cho cả xưởng`
       );
     },
-    [attendance, employees, selectedMonth, persist]
+    [attendance, activeEmployees, selectedMonth, persist]
   );
 
   /* ----------------------------------- Ứng lương ----------------------------------- */
@@ -219,7 +234,7 @@ export function usePayrollData() {
         date,
         type,
         amount: numericAmount,
-        note: note?.trim() || (type === 'advance' ? 'Ứng lương' : 'Tiền ảnh'),
+        note: note?.trim() || ADVANCE_TYPE_LABEL[type] || 'Khoản trừ',
       };
       setAdvances((prev) => [entry, ...prev]);
       await persist(() => saveAdvanceDoc(entry), 'Đã lưu khoản khấu trừ & cập nhật phiếu lương');
@@ -304,6 +319,24 @@ export function usePayrollData() {
     [employees, selectedMonth, persist]
   );
 
+  /**
+   * Cho nhân viên nghỉ từ tháng đang xem: không còn trong bảng chấm công từ tháng này trở đi
+   * (trừ khi tháng đó đã có dữ liệu), dữ liệu & bảng lương các tháng cũ giữ nguyên.
+   */
+  const setEmployeeActive = useCallback(
+    async (empId, active) => {
+      const emp = employees.find((e) => e.id === empId);
+      if (!emp) return;
+      const inactiveFrom = active ? null : selectedMonth;
+      setEmployees((prev) => prev.map((e) => (e.id === empId ? { ...e, active, inactiveFrom } : e)));
+      await persist(
+        () => updateEmployeeStatusDoc(empId, active, inactiveFrom),
+        active ? `Đã khôi phục ${emp.name}` : `${emp.name} đã nghỉ từ ${formatMonthLabel(selectedMonth)}`
+      );
+    },
+    [employees, selectedMonth, persist]
+  );
+
   const regenerateSlug = useCallback(
     async (empId) => {
       const target = employees.find((e) => e.id === empId);
@@ -372,6 +405,20 @@ export function usePayrollData() {
     await updatePassword(user, nextPw);
   }, []);
 
+  /* --------- Nhập dữ liệu cũ từ Excel (ẩn/hiện bằng cờ settings/app.legacyImportEnabled) --------- */
+  const isLegacyImportEnabled = featureFlags.legacyImportEnabled === true;
+  const isDatabaseEmpty =
+    employees.length === 0 && advances.length === 0 && expenses.length === 0 && Object.keys(attendance).length === 0;
+
+  const importLegacyData = useCallback(
+    async (data) => {
+      const count = await importLegacyDataDocs(data);
+      showToast(`Đã nhập ${count} bản ghi lên Firebase`);
+      return count;
+    },
+    [showToast]
+  );
+
   /* --------------------------------- Xuất Excel --------------------------------- */
   const runExport = useCallback(
     async (task, errorMessage) => {
@@ -421,9 +468,15 @@ export function usePayrollData() {
     [selectedMonth, attendance, advances, expenses]
   );
 
+  /** Nhân viên có mặt trên bảng lương tháng đang xem (gồm người đã nghỉ nếu tháng đó còn dữ liệu) */
+  const monthEmployees = useMemo(
+    () => employees.filter((e) => isEmployeeInMonth(e, selectedMonth, { attendance, advances, expenses })),
+    [employees, selectedMonth, attendance, advances, expenses]
+  );
+
   const monthPayrollSummary = useMemo(
-    () => employees.map((emp) => ({ employee: emp, ...calculatePayroll(emp) })),
-    [employees, calculatePayroll]
+    () => monthEmployees.map((emp) => ({ employee: emp, ...calculatePayroll(emp) })),
+    [monthEmployees, calculatePayroll]
   );
 
   const kpiStats = useMemo(() => {
@@ -444,6 +497,8 @@ export function usePayrollData() {
 
   return {
     employees,
+    activeEmployees,
+    monthEmployees,
     selectedMonth,
     setSelectedMonth,
     selectedMonthDisplayLabel,
@@ -454,7 +509,6 @@ export function usePayrollData() {
     isAuthReady,
     isDataReady,
     adminEmail,
-    cloudSyncStatus,
     isFirebaseConfigured,
     toast,
     showToast,
@@ -476,6 +530,7 @@ export function usePayrollData() {
     deleteExpense,
     addEmployee,
     saveSalaryEdit,
+    setEmployeeActive,
     regenerateSlug,
     copyEmployeeLink,
     loginAdmin,
@@ -484,5 +539,8 @@ export function usePayrollData() {
     handleExportWorkshop,
     handleExportEmployee,
     calculatePayroll,
+    isDatabaseEmpty,
+    isLegacyImportEnabled,
+    importLegacyData,
   };
 }

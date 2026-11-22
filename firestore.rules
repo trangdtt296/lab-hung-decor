@@ -21,6 +21,12 @@ service cloud.firestore {
       allow read, write: if isAdmin() && collection in ['employees', 'attendance', 'advances', 'expenses'];
     }
 
+    // Cờ bật/tắt tính năng (VD settings/app.legacyImportEnabled): admin đọc, chỉ sửa trong Console
+    match /settings/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // Danh sách admin: admin tự xem được, nhưng chỉ sửa được trong Firebase Console
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;

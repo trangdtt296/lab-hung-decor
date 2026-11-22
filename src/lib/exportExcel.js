@@ -17,6 +17,7 @@ import {
   parseMonthKey,
   toPlainAsciiName,
   attendanceMark,
+  isEmployeeInMonth,
   STANDARD_WORK_DAYS,
   NET_SALARY_ROUNDING,
 } from './payroll';
@@ -190,25 +191,32 @@ export const buildEmployeeWorkbook = (ExcelJS, emp, monthKeys, attendance, advan
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Lab Hung Decor';
   const ws = wb.addWorksheet('Sheet1');
-  setupColumns(ws, { nameWidth: 12.63, extraCols: [COL.TOTAL_DAYS, COL.SALARY, COL.NET] });
+  setupColumns(ws, { nameWidth: 12.63, extraCols: [COL.TOTAL_DAYS, COL.SALARY, COL.NET, COL.NET + 1] });
 
   let row = 1;
   monthKeys.forEach((monthKey) => {
     const calc = calculateEmployeeMonthPayroll(emp, monthKey, attendance, advances, expenses);
-    const hasReimburse = calc.totalReimbursements > 0;
     const dataRow = row + 4;
     const labelRow = dataRow + 1;
     const valueRow = dataRow + 2;
     const photoRef = ref(COL.TOTAL_DAYS, valueRow);
     const advanceRef = ref(COL.SALARY, valueRow);
-    const reimburseRef = ref(COL.NET, valueRow);
+    // Ô phụ (chỉ khi có): khoản trừ khác (trừ), chi tiêu được hoàn (cộng) — xếp tiếp từ cột AI
+    const extras = [
+      calc.totalOtherDeductions > 0 && { label: 'Khoản trừ khác', amount: calc.totalOtherDeductions, sign: '-' },
+      calc.totalReimbursements > 0 && { label: 'Chi tiêu', amount: calc.totalReimbursements, sign: '+' },
+    ]
+      .filter(Boolean)
+      .map((x, i) => ({ ...x, col: COL.NET + i }));
+    const minusRefs = [advanceRef, photoRef, ...extras.filter((x) => x.sign === '-').map((x) => ref(x.col, valueRow))];
+    const plusExpr = extras.filter((x) => x.sign === '+').map((x) => `+${ref(x.col, valueRow)}`).join('');
 
     writeAttendanceTable(ws, row, monthKey, [{ name: emp.name, calc }], {
       extraHeaders: ['Mức lương (VND)', 'Lương thực nhận (VND)'],
       writeExtra: (r) => {
         put(ws, [r, COL.SALARY], calc.baseSalary, { numFmt: MONEY_FMT });
-        const net = netExpr(ref(COL.SALARY, r), ref(COL.TOTAL_DAYS, r), [advanceRef, photoRef]);
-        put(ws, [r, COL.NET], formula(hasReimburse ? `${net}+${reimburseRef}` : net, calc.netSalary), { numFmt: MONEY_FMT });
+        const net = netExpr(ref(COL.SALARY, r), ref(COL.TOTAL_DAYS, r), minusRefs);
+        put(ws, [r, COL.NET], formula(`${net}${plusExpr}`, calc.netSalary), { numFmt: MONEY_FMT });
       },
     });
 
@@ -217,10 +225,10 @@ export const buildEmployeeWorkbook = (ExcelJS, emp, monthKeys, attendance, advan
     put(ws, [labelRow, COL.SALARY], 'Ứng lương', label);
     put(ws, [valueRow, COL.TOTAL_DAYS], blankIfZero(calc.totalPhotoFee), { numFmt: MONEY_FMT });
     put(ws, [valueRow, COL.SALARY], blankIfZero(calc.totalAdvances), { numFmt: MONEY_FMT });
-    if (hasReimburse) {
-      put(ws, [labelRow, COL.NET], 'Chi tiêu', label);
-      put(ws, [valueRow, COL.NET], calc.totalReimbursements, { numFmt: MONEY_FMT });
-    }
+    extras.forEach((x) => {
+      put(ws, [labelRow, x.col], x.label, label);
+      put(ws, [valueRow, x.col], x.amount, { numFmt: MONEY_FMT });
+    });
     row = valueRow + 2;
   });
 
@@ -286,9 +294,17 @@ const writeEmployeeBlock = (ws, startRow, { emp, calc, tableRow }) => {
   }
 
   const netRow = row++;
+  const otherRows = calc.empOtherDeductions.map((item) => {
+    const r = row++;
+    blockLabel(ws, r, `${item.note || 'Khoản trừ khác'} (VND)`, COLORS.PHOTO);
+    blockValue(ws, r, item.amount);
+    return r;
+  });
+
   const minus = [
     ...(advanceRefs.length ? [`SUM(${advanceRefs[0]}:${advanceRefs[advanceRefs.length - 1]})`] : []),
     ...(photoRow ? [valueRef(photoRow)] : []),
+    ...otherRows.map(valueRef),
   ];
   blockLabel(ws, netRow, 'Lương thực nhận (VND)');
   blockValue(ws, netRow, formula(netExpr(valueRef(salaryRow), ref(COL.TOTAL_DAYS, tableRow), minus), calc.netWorkSalary),
@@ -426,7 +442,8 @@ const addWorkshopMonthSheet = (wb, monthKey, employees, attendance, advances, ex
   const ws = wb.addWorksheet(`Tháng ${month}`);
   setupColumns(ws, { nameWidth: 12.63, extraCols: [COL.TOTAL_DAYS] });
 
-  const items = employees.map((emp) => ({
+  const monthStaff = employees.filter((e) => isEmployeeInMonth(e, monthKey, { attendance, advances, expenses }));
+  const items = monthStaff.map((emp) => ({
     emp,
     calc: calculateEmployeeMonthPayroll(emp, monthKey, attendance, advances, expenses),
   }));
@@ -448,7 +465,7 @@ const addWorkshopMonthSheet = (wb, monthKey, employees, attendance, advances, ex
   });
 
   const monthExpenses = expenses.filter((e) => e.month === monthKey);
-  writeExpenseTable(ws, lowerStart, employees, monthExpenses);
+  writeExpenseTable(ws, lowerStart, employees, monthExpenses); // tra tên người mua theo toàn bộ nhân viên
   writeFuelTable(ws, lowerStart, monthExpenses);
 };
 

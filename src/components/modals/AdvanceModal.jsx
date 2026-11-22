@@ -46,6 +46,7 @@ export default function AdvanceModal({ onClose, employees, selectedMonth, onAddA
             <select value={form.type} onChange={set('type')} className={inputClass}>
               <option value="advance">Ứng lương</option>
               <option value="photo_fee">Tiền ảnh</option>
+              <option value="other_deduction">Khoản trừ khác</option>
             </select>
           </FormField>
           <FormField label="Ngày">

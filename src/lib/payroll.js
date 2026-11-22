@@ -187,6 +187,26 @@ export const getBaseSalaryForMonth = (emp, monthKey) => {
   return effective !== undefined ? Number(history[effective]) || 0 : Number(emp.baseSalary) || 0;
 };
 
+/** Nhân viên có dữ liệu (chấm công / ứng / chi tiêu) trong tháng hay không */
+export const employeeHasMonthData = (emp, monthKey, { attendance = {}, advances = [], expenses = [] }) =>
+  Object.keys(attendance[monthKey]?.[emp.id] || {}).length > 0 ||
+  advances.some((a) => a.month === monthKey && a.employeeId === emp.id) ||
+  expenses.some((e) => e.month === monthKey && (e.employeeId === emp.id || e.payerId === emp.id));
+
+/**
+ * Nhân viên có xuất hiện trên bảng lương của tháng không:
+ * - Không hiện ở các tháng trước khi vào làm (trước mốc lương đầu tiên)
+ * - Đã nghỉ (active: false): vẫn hiện ở các tháng trước tháng nghỉ (inactiveFrom) và ở tháng nào
+ *   còn dữ liệu (VD làm nửa tháng rồi nghỉ), ẩn ở các tháng sau
+ */
+export const isEmployeeInMonth = (emp, monthKey, data) => {
+  const firstMonth = Object.keys(emp.salaryByMonth || {}).sort()[0];
+  if (firstMonth && monthKey < firstMonth) return false;
+  if (emp.active !== false) return true;
+  if (emp.inactiveFrom && monthKey < emp.inactiveFrom) return true;
+  return employeeHasMonthData(emp, monthKey, data);
+};
+
 /** Lương cơ bản hiện hành = mốc lương mới nhất */
 export const latestBaseSalary = (salaryByMonth = {}, fallback = 0) => {
   const keys = Object.keys(salaryByMonth).sort();
@@ -210,7 +230,7 @@ const sumAmount = (items) => items.reduce((sum, item) => sum + (Number(item.amou
  * Công thức tính lương chuẩn 30 ngày công:
  * - dayRate = baseSalary / 30
  * - basePayByDays = dayRate * totalDays (tháng 31 ngày làm đủ 31 công sẽ > baseSalary)
- * - netWorkSalary = làm tròn nghìn (dayRate * totalDays - totalAdvances - totalPhotoFee)
+ * - netWorkSalary = làm tròn nghìn (dayRate * totalDays - ứng - tiền ảnh - khoản trừ khác)
  * - netSalary (số thực trả) = netWorkSalary + totalReimbursements (chỉ người chi tiền có khoản này)
  */
 export const calculateEmployeeMonthPayroll = (
@@ -230,6 +250,8 @@ export const calculateEmployeeMonthPayroll = (
   const ofThisEmployeeMonth = (item) => emp && item.month === monthKey && item.employeeId === emp.id;
   const empAdvances = advancesList.filter((a) => ofThisEmployeeMonth(a) && a.type === 'advance');
   const empPhotoFees = advancesList.filter((a) => ofThisEmployeeMonth(a) && a.type === 'photo_fee');
+  // Khoản trừ khác (VD "Tiền CA bắt"): trừ vào lương nhưng không tính vào "Tổng lương ứng"
+  const empOtherDeductions = advancesList.filter((a) => ofThisEmployeeMonth(a) && a.type === 'other_deduction');
   // Khoản chi "hoàn vào lương" được cộng cho NGƯỜI CHI tiền (payerId), không phải người mua —
   // giống bảng lương tổng: mục "Chi Tiêu" của người chi = tổng các khoản họ đã chi hộ xưởng.
   const empReimbursements = expensesList.filter(
@@ -238,12 +260,13 @@ export const calculateEmployeeMonthPayroll = (
 
   const totalAdvances = sumAmount(empAdvances);
   const totalPhotoFee = sumAmount(empPhotoFees);
+  const totalOtherDeductions = sumAmount(empOtherDeductions);
   const totalReimbursements = sumAmount(empReimbursements);
 
   // Cùng công thức với file Excel: "Lương thực nhận" = ROUND((lương/30)*công − ứng − ảnh, -3),
   // "Lương + Chi tiêu" = lương thực nhận + tiền hoàn chi. Dùng dayRate * totalDays chưa làm tròn
   // để web và Excel ra đúng 1 con số.
-  const netWorkSalary = roundNetSalary(dayRate * totalDays - totalAdvances - totalPhotoFee);
+  const netWorkSalary = roundNetSalary(dayRate * totalDays - totalAdvances - totalPhotoFee - totalOtherDeductions);
   const netSalary = netWorkSalary + totalReimbursements;
 
   return {
@@ -255,6 +278,8 @@ export const calculateEmployeeMonthPayroll = (
     totalAdvances,
     empPhotoFees,
     totalPhotoFee,
+    empOtherDeductions,
+    totalOtherDeductions,
     empReimbursements,
     totalReimbursements,
     netWorkSalary,
