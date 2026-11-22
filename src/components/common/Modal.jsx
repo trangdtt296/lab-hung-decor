@@ -9,7 +9,9 @@ import { X } from 'lucide-react';
  * - Desktop: hộp giữa màn hình
  * - Đóng bằng phím Esc / bấm nền mờ, khoá cuộn trang phía sau
  */
-export default function Modal({ isOpen = true, onClose, title, subtitle, icon, children, footer }) {
+const SIZES = { md: 'sm:max-w-md', lg: 'sm:max-w-2xl' };
+
+export default function Modal({ isOpen = true, onClose, title, subtitle, icon, children, footer, size = 'md' }) {
   const titleId = useId();
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function Modal({ isOpen = true, onClose, title, subtitle, icon, c
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white w-full sm:max-w-md max-h-[90dvh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl animate-modal-in"
+        className={`bg-white w-full ${SIZES[size] || SIZES.md} max-h-[90dvh] flex flex-col rounded-t-3xl sm:rounded-3xl shadow-2xl animate-modal-in`}
       >
         <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">

@@ -13,6 +13,8 @@ import Toast from '../common/Toast';
 import LoadingScreen from '../common/LoadingScreen';
 import AppHeader, { HeaderButton } from '../common/AppHeader';
 import ExportAllModal from '../modals/ExportAllModal';
+import ChangePasswordModal from '../modals/ChangePasswordModal';
+import LegacyImportModal from '../modals/LegacyImportModal';
 
 /** Hành động dùng chung giữa các trang (VD mở hộp thoại Xuất Excel từ trang Lương) */
 const AdminUiContext = createContext({ openExportModal: () => {} });
@@ -115,6 +117,8 @@ export default function AdminShell({ children }) {
   const data = usePayroll();
   const pathname = usePathname();
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   if (!data.isFirebaseConfigured) return <FirebaseConfigError />;
   if (!data.isAuthReady) return <LoadingScreen message="Đang kiểm tra đăng nhập..." />;
@@ -127,7 +131,7 @@ export default function AdminShell({ children }) {
     );
   }
 
-  // Thẻ số liệu tháng chỉ hiện ở các tab nghiệp vụ (không hiện ở Đổi mật khẩu / Nhập dữ liệu)
+  // Thẻ số liệu tháng chỉ hiện ở các tab nghiệp vụ
   const showKpis = ADMIN_TABS.some((t) => isActive(pathname, t.href));
 
   return (
@@ -143,7 +147,13 @@ export default function AdminShell({ children }) {
           actions={
             <>
               <HeaderButton icon={Download} label="Xuất Excel" onClick={() => setIsExportOpen(true)} />
-              <AccountMenu email={data.adminEmail} showLegacyImport={data.isLegacyImportEnabled} onLogout={data.logoutAdmin} />
+              <AccountMenu
+                email={data.adminEmail}
+                showLegacyImport={data.isLegacyImportEnabled}
+                onChangePassword={() => setIsPasswordOpen(true)}
+                onOpenImport={() => setIsImportOpen(true)}
+                onLogout={data.logoutAdmin}
+              />
             </>
           }
         />
@@ -160,6 +170,23 @@ export default function AdminShell({ children }) {
         </main>
 
         <MobileTabBar pathname={pathname} />
+
+        {isPasswordOpen && (
+          <ChangePasswordModal
+            email={data.adminEmail}
+            onClose={() => setIsPasswordOpen(false)}
+            onChangePassword={data.changeAdminPassword}
+            onSuccess={() => data.showToast('Đã đổi mật khẩu. Lần đăng nhập sau dùng mật khẩu mới.')}
+          />
+        )}
+
+        {isImportOpen && data.isLegacyImportEnabled && (
+          <LegacyImportModal
+            isDatabaseEmpty={data.isDatabaseEmpty}
+            onImport={data.importLegacyData}
+            onClose={() => setIsImportOpen(false)}
+          />
+        )}
 
         {isExportOpen && (
           <ExportAllModal

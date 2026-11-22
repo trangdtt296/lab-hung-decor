@@ -56,7 +56,7 @@ export default function LeaveEmployeeModal({ employee, monthLabel, onClose, onCo
           <li>Chấm công, ứng lương và bảng lương các tháng trước vẫn giữ nguyên.</li>
           <li>Link xem phiếu lương của {employee.name} sẽ ngừng hoạt động.</li>
           <li>
-            Nếu {employee.name} đi làm lại, bấm <strong>Đi làm lại</strong> ở mục &quot;Nhân viên đã nghỉ&quot; cuối bảng chấm công.
+            Nếu {employee.name} đi làm lại, dùng nút <strong>Thêm nhân viên</strong> để thêm như một nhân viên mới.
           </li>
         </ul>
       </div>

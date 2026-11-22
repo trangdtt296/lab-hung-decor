@@ -196,12 +196,16 @@ export const employeeHasMonthData = (emp, monthKey, { attendance = {}, advances 
 /**
  * Nhân viên có xuất hiện trên bảng lương của tháng không:
  * - Không hiện ở các tháng trước khi vào làm (trước mốc lương đầu tiên)
+ * - Tháng chưa tới (sau tháng hiện tại): chưa tự lấy nhân viên sang, chỉ hiện ai đã có dữ liệu tháng đó.
+ *   Từ ngày 1 của tháng, nhân viên đang làm mới tự xuất hiện.
  * - Đã nghỉ (active: false): vẫn hiện ở các tháng trước tháng nghỉ (inactiveFrom) và ở tháng nào
  *   còn dữ liệu (VD làm nửa tháng rồi nghỉ), ẩn ở các tháng sau
+ * @param currentMonthKey tháng hiện tại 'YYYY-MM' (mặc định theo đồng hồ máy; null = chưa biết, bỏ qua quy tắc tháng tới)
  */
-export const isEmployeeInMonth = (emp, monthKey, data) => {
+export const isEmployeeInMonth = (emp, monthKey, data, currentMonthKey = getCurrentMonthKey()) => {
   const firstMonth = Object.keys(emp.salaryByMonth || {}).sort()[0];
   if (firstMonth && monthKey < firstMonth) return false;
+  if (currentMonthKey && monthKey > currentMonthKey) return employeeHasMonthData(emp, monthKey, data);
   if (emp.active !== false) return true;
   if (emp.inactiveFrom && monthKey < emp.inactiveFrom) return true;
   return employeeHasMonthData(emp, monthKey, data);

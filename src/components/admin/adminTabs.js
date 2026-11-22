@@ -8,8 +8,3 @@ export const ADMIN_TABS = [
   { href: '/bang-luong', label: 'Lương', icon: Wallet },
 ];
 
-/** Trang mở từ menu tài khoản (không nằm trên thanh tab, không hiện thẻ số liệu tháng) */
-export const ACCOUNT_PAGES = {
-  changePassword: '/doi-mat-khau',
-  legacyImport: '/nhap-du-lieu',
-};

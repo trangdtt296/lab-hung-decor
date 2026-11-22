@@ -87,7 +87,7 @@ export const saveEmployeeDoc = async (emp) => {
   });
 };
 
-/** Cho nghỉ (active: false, nghỉ từ tháng inactiveFrom) hoặc khôi phục (active: true) */
+/** Đánh dấu nhân viên nghỉ việc từ tháng inactiveFrom (dữ liệu cũ giữ nguyên) */
 export const updateEmployeeStatusDoc = async (empId, active, inactiveFrom = null) => {
   if (!isFirebaseConfigured || !firebaseDb) return;
   await updateDoc(doc(firebaseDb, 'employees', empId), {
@@ -124,8 +124,8 @@ export const updateEmployeeSalaryDoc = async (empId, monthKey, salary, currentBa
 
 
 /**
- * Ghi dữ liệu cũ đọc từ file Excel (xem legacyImport.js). Chỉ dùng qua LegacyImportPanel,
- * panel này ẩn/hiện bằng cờ settings/app.legacyImportEnabled trên Firestore.
+ * Ghi dữ liệu cũ đọc từ file Excel (xem legacyImport.js). Chỉ dùng qua popup LegacyImportModal,
+ * popup này ẩn/hiện bằng cờ settings/app.legacyImportEnabled trên Firestore.
  * Chia nhiều batch vì Firestore giới hạn 500 thao tác / batch.
  */
 export const importLegacyDataDocs = async ({ employees, attendance, advances, expenses }) => {

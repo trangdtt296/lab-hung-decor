@@ -22,6 +22,7 @@ import {
   calculateEmployeeMonthPayroll,
   latestBaseSalary,
   isEmployeeInMonth,
+  toMonthKey,
 } from '../lib/payroll';
 import {
   saveAttendanceDoc,
@@ -38,6 +39,7 @@ import {
 } from '../lib/firestoreService';
 import { exportWorkshopExcel, exportEmployeeExcel, getExportMonthKeys } from '../lib/exportExcel';
 import { useToast } from './useToast';
+import { useTodayInfo } from './useTodayInfo';
 
 const NEXT_ATTENDANCE_VALUE = { 0: 1, 1: 0.5, 0.5: 0 };
 const ADVANCE_TYPE_LABEL = { advance: 'Ứng lương', photo_fee: 'Tiền ảnh', other_deduction: 'Khoản trừ khác' };
@@ -320,18 +322,17 @@ export function usePayrollData() {
   );
 
   /**
-   * Cho nhân viên nghỉ từ tháng đang xem: không còn trong bảng chấm công từ tháng này trở đi
-   * (trừ khi tháng đó đã có dữ liệu), dữ liệu & bảng lương các tháng cũ giữ nguyên.
+   * Cho nhân viên nghỉ từ tháng đang xem: không còn trong bảng chấm công từ tháng này trở đi,
+   * dữ liệu & bảng lương các tháng cũ giữ nguyên. Đi làm lại = thêm như nhân viên mới.
    */
-  const setEmployeeActive = useCallback(
-    async (empId, active) => {
+  const markEmployeeLeft = useCallback(
+    async (empId) => {
       const emp = employees.find((e) => e.id === empId);
       if (!emp) return;
-      const inactiveFrom = active ? null : selectedMonth;
-      setEmployees((prev) => prev.map((e) => (e.id === empId ? { ...e, active, inactiveFrom } : e)));
+      setEmployees((prev) => prev.map((e) => (e.id === empId ? { ...e, active: false, inactiveFrom: selectedMonth } : e)));
       await persist(
-        () => updateEmployeeStatusDoc(empId, active, inactiveFrom),
-        active ? `Đã khôi phục ${emp.name}` : `${emp.name} đã nghỉ từ ${formatMonthLabel(selectedMonth)}`
+        () => updateEmployeeStatusDoc(empId, false, selectedMonth),
+        `${emp.name} đã nghỉ từ ${formatMonthLabel(selectedMonth)}`
       );
     },
     [employees, selectedMonth, persist]
@@ -469,9 +470,14 @@ export function usePayrollData() {
   );
 
   /** Nhân viên có mặt trên bảng lương tháng đang xem (gồm người đã nghỉ nếu tháng đó còn dữ liệu) */
+  // Theo dõi ngày hiện tại để sang ngày 1 của tháng mới, danh sách nhân viên tự cập nhật (không cần F5)
+  const todayInfo = useTodayInfo();
+  // null khi đang prerender (chưa biết ngày) — không gọi new Date() trong lúc render
+  const currentMonthKey = todayInfo ? toMonthKey(todayInfo.year, todayInfo.month) : null;
   const monthEmployees = useMemo(
-    () => employees.filter((e) => isEmployeeInMonth(e, selectedMonth, { attendance, advances, expenses })),
-    [employees, selectedMonth, attendance, advances, expenses]
+    () =>
+      employees.filter((e) => isEmployeeInMonth(e, selectedMonth, { attendance, advances, expenses }, currentMonthKey)),
+    [employees, selectedMonth, attendance, advances, expenses, currentMonthKey]
   );
 
   const monthPayrollSummary = useMemo(
@@ -530,7 +536,7 @@ export function usePayrollData() {
     deleteExpense,
     addEmployee,
     saveSalaryEdit,
-    setEmployeeActive,
+    markEmployeeLeft,
     regenerateSlug,
     copyEmployeeLink,
     loginAdmin,

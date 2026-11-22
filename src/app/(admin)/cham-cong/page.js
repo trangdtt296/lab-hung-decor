@@ -8,7 +8,6 @@ import AddEmployeeModal from '../../../components/modals/AddEmployeeModal';
 export default function AttendancePage() {
   const data = usePayroll();
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const inactiveEmployees = data.employees.filter((e) => e.active === false);
 
   return (
     <>
@@ -18,12 +17,11 @@ export default function AttendancePage() {
         calendarCells={data.calendarCells}
         selectedMonthDisplayLabel={data.selectedMonthDisplayLabel}
         selectedMonth={data.selectedMonth}
-        inactiveEmployees={inactiveEmployees}
         onToggleAttendance={data.toggleAttendance}
         onSetAttendanceValue={data.setAttendanceValue}
         onQuickMarkAllToday={data.quickMarkAllToday}
         onOpenAddEmployee={() => setIsAddOpen(true)}
-        onSetEmployeeActive={data.setEmployeeActive}
+        onMarkEmployeeLeft={data.markEmployeeLeft}
       />
       {isAddOpen && <AddEmployeeModal onClose={() => setIsAddOpen(false)} onAddEmployee={data.addEmployee} />}
     </>

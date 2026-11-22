@@ -1,17 +1,15 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { ChevronDown, FileUp, KeyRound, LogOut } from 'lucide-react';
 import AdminAvatar from './AdminAvatar';
-import { ACCOUNT_PAGES } from './adminTabs';
 
 const itemClass = 'flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50';
 
 /**
- * Nút tài khoản trên header: email đang đăng nhập, Đổi mật khẩu, (Nhập dữ liệu cũ khi bật cờ), Đăng xuất
+ * Nút tài khoản trên header: email đang đăng nhập, Đổi mật khẩu (popup), Nhập dữ liệu cũ (popup, khi bật cờ), Đăng xuất
  */
-export default function AccountMenu({ email, showLegacyImport, onLogout }) {
+export default function AccountMenu({ email, showLegacyImport, onChangePassword, onOpenImport, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -54,15 +52,31 @@ export default function AccountMenu({ email, showLegacyImport, onLogout }) {
               <div className="text-sm font-bold text-slate-900 truncate">{email}</div>
             </div>
           </div>
-          <Link href={ACCOUNT_PAGES.changePassword} role="menuitem" onClick={() => setOpen(false)} className={itemClass}>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onChangePassword();
+            }}
+            className={`${itemClass} w-full cursor-pointer`}
+          >
             <KeyRound className="w-4 h-4 text-slate-500" />
             Đổi mật khẩu
-          </Link>
+          </button>
           {showLegacyImport && (
-            <Link href={ACCOUNT_PAGES.legacyImport} role="menuitem" onClick={() => setOpen(false)} className={itemClass}>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onOpenImport();
+              }}
+              className={`${itemClass} w-full cursor-pointer`}
+            >
               <FileUp className="w-4 h-4 text-slate-500" />
               Nhập dữ liệu cũ (Excel)
-            </Link>
+            </button>
           )}
           <button
             type="button"

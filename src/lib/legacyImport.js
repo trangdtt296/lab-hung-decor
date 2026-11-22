@@ -1,7 +1,7 @@
 /**
  * src/lib/legacyImport.js
  * Nhập dữ liệu cũ từ file Excel tải về từ Google Sheets "Bảng lương Lab Hung Decor"
- * (mỗi sheet "Tháng N" một tháng). Giao diện: LegacyImportPanel — ẩn/hiện bằng cờ
+ * (mỗi sheet "Tháng N" một tháng). Giao diện: popup LegacyImportModal — ẩn/hiện bằng cờ
  * settings/app.legacyImportEnabled trên Firestore.
  *
  * Đọc từng sheet "Tháng N": bảng chấm công (trên), khối lương từng người (cột A–F),

@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 export const inputClass =
   'w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:bg-slate-100 disabled:text-slate-500';
@@ -16,6 +17,25 @@ export default function FormField({ label, hint, children, className = '' }) {
       {children}
       {hint && <span className="block text-[11px] text-slate-500 mt-1">{hint}</span>}
     </label>
+  );
+}
+
+/** Ô mật khẩu có nút con mắt ẩn/hiện nằm trong ô */
+export function PasswordInput({ className = '', ...props }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input {...props} type={visible ? 'text' : 'password'} className={`${inputClass} pr-11 ${className}`} />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+        title={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+      >
+        {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
   );
 }
 
