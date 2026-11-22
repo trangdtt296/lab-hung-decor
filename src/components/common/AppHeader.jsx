@@ -1,13 +1,28 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import YearMonthSelectGroup from './YearMonthSelectGroup';
 
-export const BrandLogo = () => (
-  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-sm ring-2 ring-emerald-500/20">
-    LH
-  </div>
-);
+const LOGO_SIZES = {
+  md: { px: 40, className: 'w-9 h-9 sm:w-10 sm:h-10 rounded-xl' },
+  lg: { px: 64, className: 'w-16 h-16 rounded-2xl' },
+};
+
+/** Logo Hùng Decor (public/logo.jpg — nền đen, hợp với header tối) */
+export function BrandLogo({ size = 'md', priority = false }) {
+  const { px, className } = LOGO_SIZES[size] || LOGO_SIZES.md;
+  return (
+    <Image
+      src="/logo.jpg"
+      alt="Hùng Decor – Khung tranh"
+      width={px}
+      height={px}
+      priority={priority}
+      className={`${className} shrink-0 object-cover shadow-sm ring-1 ring-white/10`}
+    />
+  );
+}
 
 /** Nút trên header: mobile chỉ hiện icon (label đưa vào aria-label), từ sm hiện cả chữ */
 export function HeaderButton({ icon: Icon, label, variant = 'primary', className = '', ...props }) {
@@ -40,7 +55,7 @@ export default function AppHeader({ leading, title, nav, selectedMonth, onMonthC
       <div className={`${maxWidth} mx-auto px-4 sm:px-6`}>
         <div className="flex items-center justify-between gap-3 h-14 sm:h-16">
           <div className="flex items-center gap-2.5 min-w-0">
-            {leading || <BrandLogo />}
+            {leading || <BrandLogo priority />}
             <h1 className="text-base sm:text-lg font-extrabold tracking-tight truncate">{title}</h1>
           </div>
 

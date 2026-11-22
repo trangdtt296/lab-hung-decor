@@ -4,14 +4,7 @@ const nextConfig = {
   devIndicators: false,
   cacheComponents: true,
   partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
+  // Tailwind được xử lý qua postcss.config.mjs (chạy cho cả webpack lẫn Turbopack)
 };
 
 export default nextConfig;

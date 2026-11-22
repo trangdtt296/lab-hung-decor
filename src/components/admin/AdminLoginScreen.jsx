@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ShieldCheck, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { BrandLogo } from '../common/AppHeader';
 
 export default function AdminLoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -27,9 +28,7 @@ export default function AdminLoginScreen({ onLogin }) {
     <div className="max-w-md mx-auto px-4 py-8 sm:py-12">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-5 sm:p-7 space-y-5">
         <div className="flex items-start gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white font-black text-base flex items-center justify-center shrink-0 shadow-sm">
-            LH
-          </div>
+          <BrandLogo size="lg" priority />
           <div className="space-y-1">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
               <ShieldCheck className="w-3.5 h-3.5" />
