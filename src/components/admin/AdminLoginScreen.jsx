@@ -1,24 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldCheck, Mail, Lock, Eye, EyeOff, Sparkles, AlertCircle } from 'lucide-react';
-import { DEMO_ADMIN_EMAIL } from '../../lib/payroll';
+import { ShieldCheck, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
-export default function AdminLoginScreen({
-  activeDemoPassword,
-  onLogin,
-}) {
+export default function AdminLoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleFillDemo = () => {
-    setEmail(DEMO_ADMIN_EMAIL);
-    setPassword(activeDemoPassword);
-    setErrorMsg('');
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,7 +68,7 @@ export default function AdminLoginScreen({
                 id="admin-login-email"
                 type="email"
                 autoComplete="email"
-                placeholder={DEMO_ADMIN_EMAIL}
+                placeholder="email@vidu.com"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
@@ -90,22 +80,9 @@ export default function AdminLoginScreen({
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label
-                htmlFor="admin-login-password"
-                className="block text-xs font-bold text-slate-700"
-              >
-                Mật khẩu
-              </label>
-              <button
-                type="button"
-                onClick={handleFillDemo}
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200 transition-colors"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Điền nhanh tài khoản demo</span>
-              </button>
-            </div>
+            <label htmlFor="admin-login-password" className="block text-xs font-bold text-slate-700 mb-1.5">
+              Mật khẩu
+            </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
@@ -131,15 +108,6 @@ export default function AdminLoginScreen({
             </div>
           </div>
 
-          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-600 space-y-1">
-            <div className="font-bold text-slate-800">Thông tin tài khoản demo:</div>
-            <div className="break-all">
-              Email: <span className="font-bold text-slate-900">{DEMO_ADMIN_EMAIL}</span>
-            </div>
-            <div>
-              Mật khẩu: <span className="font-bold text-slate-900">{activeDemoPassword}</span>
-            </div>
-          </div>
 
           <button
             type="submit"

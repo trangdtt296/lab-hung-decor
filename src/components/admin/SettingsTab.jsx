@@ -4,13 +4,11 @@ import React, { useState } from 'react';
 import { Building2, Cloud, KeyRound, LogOut, ShieldCheck, User } from 'lucide-react';
 
 export default function SettingsTab({
-  demoEmail,
+  adminEmail,
   employeesCount,
   cloudSyncStatus,
-  isFirebaseConfigured,
   onChangePassword,
   onLogout,
-  onSeedSampleData,
 }) {
   const [pwForm, setPwForm] = useState({
     currentPassword: '',
@@ -18,15 +16,17 @@ export default function SettingsTab({
     confirmPassword: '',
   });
   const [pwFeedback, setPwFeedback] = useState(null);
+  const [isSavingPw, setIsSavingPw] = useState(false);
 
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     setPwFeedback(null);
+    setIsSavingPw(true);
     try {
-      onChangePassword(
-        pwForm.currentPassword.trim(),
-        pwForm.newPassword.trim(),
-        pwForm.confirmPassword.trim()
+      await onChangePassword(
+        pwForm.currentPassword,
+        pwForm.newPassword,
+        pwForm.confirmPassword
       );
       setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setPwFeedback({
@@ -38,6 +38,8 @@ export default function SettingsTab({
         type: 'error',
         text: err.message || 'Không thể đổi mật khẩu.',
       });
+    } finally {
+      setIsSavingPw(false);
     }
   };
 
@@ -59,7 +61,7 @@ export default function SettingsTab({
                   Đang hoạt động
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-600 break-all">{demoEmail}</p>
+              <p className="text-xs sm:text-sm text-slate-600 break-all">{adminEmail}</p>
             </div>
           </div>
         </div>
@@ -125,15 +127,6 @@ export default function SettingsTab({
               <span>Trạng thái lưu trữ:</span>
               <strong className="text-slate-900">{cloudSyncStatus}</strong>
             </div>
-            {isFirebaseConfigured && (
-              <button
-                type="button"
-                onClick={onSeedSampleData}
-                className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-bold cursor-pointer transition-colors"
-              >
-                Nạp dữ liệu mẫu lên Firestore
-              </button>
-            )}
           </div>
         </div>
 
@@ -206,9 +199,10 @@ export default function SettingsTab({
               </div>
               <button
                 type="submit"
-                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
+                disabled={isSavingPw}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-60"
               >
-                Cập nhật mật khẩu
+                {isSavingPw ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
               </button>
             </form>
           </div>

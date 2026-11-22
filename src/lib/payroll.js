@@ -1,293 +1,217 @@
 /**
  * src/lib/payroll.js
- * Chứa toàn bộ hằng số, quy tắc tính lương chuẩn 30 ngày, hàm định dạng tiền tệ và dữ liệu mẫu khởi tạo.
+ * Quy tắc tính lương công chuẩn 30 ngày, tiện ích ngày tháng & định dạng.
+ * Không chứa dữ liệu: mọi dữ liệu (nhân viên, chấm công, ứng, chi) lấy từ Firestore.
  */
-
-// Lương công chuẩn cố định = 30 ngày; lương 1 ngày = lương cơ bản / 30
+// Lương 1 ngày = lương cơ bản / 30 (cố định, không phụ thuộc số ngày trong tháng)
 export const STANDARD_WORK_DAYS = 30;
 
-export const DEMO_ADMIN_EMAIL = 'admin@labhungdecor.vn';
-export const DEFAULT_DEMO_PASSWORD = '123456';
+/**
+ * Làm tròn lương thực nhận. 1 = tới đồng; 1000 = tới nghìn đồng
+ * (giống công thức ROUND(...,-3) trong file Google Sheets mẫu).
+ * Dùng chung cho web và công thức Excel để 2 nơi luôn khớp số.
+ */
+export const NET_SALARY_ROUNDING = 1000;
 
-export const AVAILABLE_MONTHS = [
-  { value: '01', label: 'Tháng 1' },
-  { value: '02', label: 'Tháng 2' },
-  { value: '03', label: 'Tháng 3' },
-  { value: '04', label: 'Tháng 4' },
-  { value: '05', label: 'Tháng 5' },
-  { value: '06', label: 'Tháng 6' },
-  { value: '07', label: 'Tháng 7' },
-  { value: '08', label: 'Tháng 8' },
-  { value: '09', label: 'Tháng 9' },
-  { value: '10', label: 'Tháng 10' },
-  { value: '11', label: 'Tháng 11' },
-  { value: '12', label: 'Tháng 12' },
+
+export const AVAILABLE_MONTHS = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1).padStart(2, '0'),
+  label: `Tháng ${i + 1}`,
+}));
+
+/** Tháng đầu tiên có dữ liệu trên hệ thống (dữ liệu cũ nạp từ Google Sheets bắt đầu từ T9/2026) */
+export const FIRST_MONTH_KEY = '2026-09';
+
+/** Các năm cho bộ chọn: từ năm bắt đầu tới năm hiện tại (mới nhất trước) */
+export const AVAILABLE_YEARS = (() => {
+  const first = Number(FIRST_MONTH_KEY.slice(0, 4));
+  const last = Math.max(first, new Date().getFullYear());
+  return Array.from({ length: last - first + 1 }, (_, i) => String(last - i));
+})();
+
+export const WEEKDAY_HEADERS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+const WEEKDAY_BY_JS_INDEX = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+export const ATTENDANCE_VALUES = { FULL: 1, HALF: 0.5, OFF: 0 };
+
+/** 1 → '+', 0.5 → '-', còn lại → '' (ký hiệu dùng trong bảng chấm công & Excel) */
+export const attendanceMark = (value) =>
+  value === ATTENDANCE_VALUES.FULL ? '+' : value === ATTENDANCE_VALUES.HALF ? '-' : '';
+
+/* ----------------------------- Ngày & tháng ----------------------------- */
+
+export const toMonthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
+
+export const parseMonthKey = (monthKey) => {
+  const [year, month] = String(monthKey).split('-').map(Number);
+  return { year, month };
+};
+
+/** Mã tháng hiện tại (VD: '2026-11') */
+export const getCurrentMonthKey = () => {
+  const now = new Date();
+  return toMonthKey(now.getFullYear(), now.getMonth() + 1);
+};
+
+/** { year, month, day } của hôm nay — chỉ gọi trên client để tránh lệch SSR */
+export const getTodayInfo = () => {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
+};
+
+/** 'Tháng 11/2026' */
+export const formatMonthLabel = (monthKey) => {
+  const { year, month } = parseMonthKey(monthKey);
+  return `Tháng ${month}/${year}`;
+};
+
+/** Danh sách ngày trong tháng kèm thứ (T2..CN) */
+export const getDaysInMonth = (monthKey) => {
+  const { year, month } = parseMonthKey(monthKey);
+  const totalDays = new Date(year, month, 0).getDate();
+  return Array.from({ length: totalDays }, (_, i) => {
+    const d = i + 1;
+    const jsDay = new Date(year, month - 1, d).getDay();
+    return {
+      day: d,
+      weekday: WEEKDAY_BY_JS_INDEX[jsDay],
+      mondayBasedIndex: (jsDay + 6) % 7, // T2 = 0 ... CN = 6
+      isSunday: jsDay === 0,
+      dateStr: `${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')}`,
+    };
+  });
+};
+
+/** Ô lịch dạng lưới 7 cột (T2 → CN), null = ô trống đầu tháng */
+export const buildCalendarCells = (days) => [
+  ...Array(days[0]?.mondayBasedIndex || 0).fill(null),
+  ...days,
 ];
 
-export const AVAILABLE_YEARS = ['2026', '2025'];
-
-export const MONTHS_META = {
-  '2026-08': { status: 'Đã chốt (31 ngày)' },
-  '2026-09': { status: 'Đã chốt' },
-  '2026-10': { status: 'Đã chốt (31 ngày)' },
-  '2026-11': { status: 'Đang chạy' },
+/**
+ * So sánh 1 ngày trong tháng với hôm nay: -1 quá khứ, 0 hôm nay, 1 tương lai.
+ * Trả về null khi chưa biết hôm nay (SSR).
+ */
+export const compareWithToday = (day, monthKey, todayInfo) => {
+  if (!monthKey || !day || !todayInfo) return null;
+  const { year, month } = parseMonthKey(monthKey);
+  const target = year * 10000 + month * 100 + day;
+  const today = todayInfo.year * 10000 + todayInfo.month * 100 + todayInfo.day;
+  return Math.sign(target - today);
 };
 
-export const CHRONOLOGICAL_MONTH_KEYS = ['2026-08', '2026-09', '2026-10', '2026-11'];
+export const isPastDay = (day, monthKey, todayInfo) => compareWithToday(day, monthKey, todayInfo) === -1;
+export const isToday = (day, monthKey, todayInfo) => compareWithToday(day, monthKey, todayInfo) === 0;
+export const isFutureDay = (day, monthKey, todayInfo) => compareWithToday(day, monthKey, todayInfo) === 1;
+
+/** Trạng thái tháng: đã chốt / đang chạy / chưa tới */
+export const getMonthStatus = (monthKey, todayInfo) => {
+  if (!todayInfo) return '';
+  const current = toMonthKey(todayInfo.year, todayInfo.month);
+  if (monthKey < current) return 'Đã chốt';
+  if (monthKey === current) return 'Đang chạy';
+  return 'Chưa tới';
+};
 
 /**
- * Định dạng số tiền sang định dạng VNĐ (VD: 9.000.000đ)
+ * Các tháng có dữ liệu (chấm công / ứng / chi) tính tới `untilMonthKey`, sắp xếp tăng dần.
+ * Luôn bao gồm `untilMonthKey`.
  */
+export const getMonthKeysWithData = (
+  { attendance = {}, advances = [], expenses = [] },
+  untilMonthKey,
+  { sameYearOnly = false } = {}
+) => {
+  const keys = new Set([
+    ...Object.keys(attendance),
+    ...advances.map((a) => a.month),
+    ...expenses.map((e) => e.month),
+  ]);
+  if (untilMonthKey) keys.add(untilMonthKey);
+  const year = untilMonthKey?.slice(0, 4);
+  return [...keys]
+    .filter(Boolean)
+    .filter((k) => !untilMonthKey || k <= untilMonthKey)
+    .filter((k) => !sameYearOnly || k.startsWith(year))
+    .sort();
+};
+
+/* ------------------------------ Định dạng ------------------------------- */
+
+const vndFormatter = new Intl.NumberFormat('vi-VN');
+
+/** 9000000 → '9.000.000đ' */
 export const formatVND = (amount) => {
-  if (amount === undefined || amount === null || isNaN(amount)) return '0đ';
-  return new Intl.NumberFormat('vi-VN').format(Math.round(amount)) + 'đ';
+  if (amount === undefined || amount === null || Number.isNaN(Number(amount))) return '0đ';
+  return `${vndFormatter.format(Math.round(amount))}đ`;
 };
 
-/**
- * Chuyển tên tiếng Việt có dấu thành chuỗi không dấu an toàn cho tên file
- */
-export const toPlainAsciiName = (str) => {
-  return String(str || '')
+/** '9.000.000' → 9000000 (bỏ mọi ký tự không phải số) */
+export const parseMoneyInput = (value) => Number(String(value ?? '').replace(/\D/g, '')) || 0;
+
+const removeDiacritics = (str) =>
+  String(str || '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-};
+    .replace(/Đ/g, 'D');
+
+/** Tên tiếng Việt → chuỗi an toàn cho tên file */
+export const toPlainAsciiName = (str) => removeDiacritics(str).replace(/[^a-zA-Z0-9_-]/g, '_');
 
 /**
- * Lấy danh sách các ngày trong tháng (1 -> 28/29/30/31) kèm thứ trong tuần
- */
-export const getDaysInMonth = (monthKey) => {
-  const [year, month] = monthKey.split('-').map(Number);
-  const totalDays = new Date(year, month, 0).getDate();
-  const days = [];
-  const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-  for (let d = 1; d <= totalDays; d++) {
-    const dateObj = new Date(year, month - 1, d);
-    const mondayBasedIndex = (dateObj.getDay() + 6) % 7; // T2 = 0 ... CN = 6
-    days.push({
-      day: d,
-      weekday: dayNames[dateObj.getDay()],
-      mondayBasedIndex,
-      isSunday: dateObj.getDay() === 0,
-      dateStr: `${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')}`,
-    });
-  }
-  return days;
-};
-
-/**
- * Sinh chuỗi slug ngẫu nhiên an toàn cho link truy cập riêng của nhân viên
+ * Slug ngẫu nhiên cho link riêng của nhân viên (VD: 'duong-k7m2xq9fh4tw').
+ * Link là "chìa khoá" xem phiếu lương nên phần ngẫu nhiên dài 12 ký tự (~10^17 tổ hợp, không đoán được).
  */
 export const generateRandomSlug = (name) => {
-  const cleanName = String(name || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+  const cleanName = removeDiacritics(name).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
   const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-  let rand = '';
-  for (let i = 0; i < 5; i++) {
-    rand += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  const bytes = new Uint32Array(12);
+  globalThis.crypto.getRandomValues(bytes);
+  const rand = Array.from(bytes, (b) => chars[b % chars.length]).join('');
   return `${cleanName || 'nv'}-${rand}`;
 };
 
+/* ------------------------------ Tính lương ------------------------------ */
+
 /**
- * Hàm tạo dữ liệu chấm công mẫu
+ * Lương cơ bản áp dụng cho 1 tháng. `employee.salaryByMonth` lưu các mốc thay đổi lương
+ * ({ '2026-09': 7500000, '2026-11': 8000000 }): mỗi mốc có hiệu lực từ tháng đó trở đi
+ * cho tới mốc kế tiếp. Nhờ vậy sửa lương tháng này không làm đổi lương các tháng đã chốt.
  */
-export const buildAttendanceMap = (totalDays, targetWorkDays, maxActiveDay = totalDays) => {
-  const map = {};
-  if (targetWorkDays <= 0) return map;
+export const getBaseSalaryForMonth = (emp, monthKey) => {
+  if (!emp) return 0;
+  const history = emp.salaryByMonth || {};
+  const keys = Object.keys(history).sort();
+  const effective = keys.filter((k) => k <= monthKey).pop() ?? keys[0];
+  return effective !== undefined ? Number(history[effective]) || 0 : Number(emp.baseSalary) || 0;
+};
 
-  if (targetWorkDays >= maxActiveDay) {
-    for (let d = 1; d <= maxActiveDay; d++) {
-      map[d] = 1;
-    }
-    return map;
-  }
-
-  let remaining = targetWorkDays;
-  for (let d = 1; d <= maxActiveDay && remaining > 0; d++) {
-    const availableDays = maxActiveDay - d + 1;
-    if (remaining >= availableDays) {
-      map[d] = 1;
-      remaining -= 1;
-    } else if (remaining >= 1) {
-      if (d % 7 === 0 && availableDays - 1 >= remaining) {
-        map[d] = 0;
-      } else {
-        map[d] = 1;
-        remaining -= 1;
-      }
-    } else if (remaining === 0.5) {
-      map[d] = 0.5;
-      remaining = 0;
-    }
-  }
-  if (remaining === 0.5) {
-    for (let d = 1; d <= maxActiveDay; d++) {
-      if (!map[d]) {
-        map[d] = 0.5;
-        break;
-      }
-    }
-  }
-  return map;
+/** Lương cơ bản hiện hành = mốc lương mới nhất */
+export const latestBaseSalary = (salaryByMonth = {}, fallback = 0) => {
+  const keys = Object.keys(salaryByMonth).sort();
+  return keys.length ? salaryByMonth[keys[keys.length - 1]] : fallback;
 };
 
 /**
- * Dữ liệu nhân sự mẫu ban đầu
+ * Làm tròn giống hàm ROUND của Excel/Google Sheets: .5 làm tròn ra xa số 0
+ * (Math.round của JS làm tròn -1.5 thành -1, còn Excel ra -2).
  */
-export const INITIAL_EMPLOYEES = [
-  {
-    id: 'thuy',
-    name: 'Thúy',
-    roleLabel: 'Quản lý xưởng & In ấn',
-    baseSalary: 9000000,
-    slug: 'thuy-x9a2k',
-    active: true,
-  },
-  {
-    id: 'lep',
-    name: 'Lép',
-    roleLabel: 'Kỹ thuật khung & Giao hàng',
-    baseSalary: 7500000,
-    slug: 'lep-m4p7q',
-    active: true,
-  },
-  {
-    id: 'duong',
-    name: 'Dương',
-    roleLabel: 'Gia công khung & Đóng gói',
-    baseSalary: 7500000,
-    slug: 'duong-k7m2x',
-    active: true,
-  },
-  {
-    id: 'ly',
-    name: 'Ly',
-    roleLabel: 'Hoàn thiện & Kiểm hàng',
-    baseSalary: 6600000,
-    slug: 'ly-r3w8n',
-    active: true,
-  },
-  {
-    id: 'linh',
-    name: 'Linh',
-    roleLabel: 'Phụ xưởng & Đóng gói',
-    baseSalary: 6000000,
-    slug: 'linh-v5t1z',
-    active: true,
-  },
-];
-
-export const HISTORICAL_BASE_SALARY = {
-  '2026-08': {
-    thuy: 9000000,
-    lep: 7500000,
-    duong: 7500000,
-    ly: 6600000,
-    linh: 6000000,
-  },
-  '2026-09': {
-    thuy: 9000000,
-    lep: 7500000,
-    duong: 7500000,
-    ly: 6600000,
-    linh: 6000000,
-  },
-  '2026-10': {
-    thuy: 9000000,
-    lep: 7500000,
-    duong: 7500000,
-    ly: 6600000,
-    linh: 6000000,
-  },
-  '2026-11': {
-    thuy: 9000000,
-    lep: 7500000,
-    duong: 7500000,
-    ly: 6600000,
-    linh: 6000000,
-  },
+export const roundNetSalary = (amount) => {
+  const units = Math.abs(amount) / NET_SALARY_ROUNDING;
+  // Bù sai số dấu phẩy động (VD 2.4999999 do phép chia /30)
+  const rounded = Math.round(units + 1e-9) * NET_SALARY_ROUNDING;
+  return amount < 0 ? -rounded : rounded;
 };
 
-export const INITIAL_ATTENDANCE = {
-  '2026-08': {
-    thuy: buildAttendanceMap(31, 31, 31),
-    lep: buildAttendanceMap(31, 28, 31),
-    duong: buildAttendanceMap(31, 25, 31),
-    ly: buildAttendanceMap(31, 24, 31),
-    linh: buildAttendanceMap(31, 20, 31),
-  },
-  '2026-09': {
-    thuy: buildAttendanceMap(30, 26, 30),
-    lep: buildAttendanceMap(30, 25, 30),
-    duong: buildAttendanceMap(30, 22, 30),
-    ly: buildAttendanceMap(30, 24, 30),
-    linh: buildAttendanceMap(30, 21, 30),
-  },
-  '2026-10': {
-    thuy: buildAttendanceMap(31, 27, 31),
-    lep: buildAttendanceMap(31, 24, 31),
-    duong: buildAttendanceMap(31, 23, 31),
-    ly: buildAttendanceMap(31, 26.5, 31),
-    linh: buildAttendanceMap(31, 25, 31),
-  },
-  '2026-11': {
-    thuy: buildAttendanceMap(30, 18, 20),
-    lep: buildAttendanceMap(30, 17, 20),
-    duong: {
-      1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1,
-      11: 1, 12: 0.5, 13: 1, 14: 1, 15: 1, 16: 1, 17: 1, 18: 1, 19: 1, 20: 1,
-    },
-    ly: buildAttendanceMap(30, 18.5, 20),
-    linh: buildAttendanceMap(30, 16, 20),
-  },
-};
-
-export const INITIAL_ADVANCES = [
-  { id: 'adv-1', month: '2026-08', employeeId: 'lep', date: '09/08', type: 'advance', amount: 2500000, note: 'Ứng lương đợt 1 tháng 8' },
-  { id: 'adv-2', month: '2026-08', employeeId: 'duong', date: '20/08', type: 'advance', amount: 1500000, note: 'Ứng lương đợt 1 tháng 8' },
-  { id: 'adv-3', month: '2026-08', employeeId: 'linh', date: '24/08', type: 'photo_fee', amount: 90000, note: 'Tiền in ảnh cá nhân tháng 8' },
-  { id: 'adv-4', month: '2026-09', employeeId: 'thuy', date: '28/09', type: 'photo_fee', amount: 140000, note: 'Tiền in ảnh cá nhân tháng 9' },
-  { id: 'adv-5', month: '2026-09', employeeId: 'lep', date: '26/09', type: 'advance', amount: 1500000, note: 'Ứng lương tháng 9' },
-  { id: 'adv-6', month: '2026-09', employeeId: 'lep', date: '29/09', type: 'photo_fee', amount: 170000, note: 'Tiền ảnh tháng 9' },
-  { id: 'adv-7', month: '2026-09', employeeId: 'duong', date: '22/09', type: 'advance', amount: 1500000, note: 'Ứng lương tháng 9' },
-  { id: 'adv-8', month: '2026-09', employeeId: 'ly', date: '28/09', type: 'photo_fee', amount: 305000, note: 'Tiền ảnh tháng 9' },
-  { id: 'adv-9', month: '2026-10', employeeId: 'thuy', date: '25/10', type: 'photo_fee', amount: 60000, note: 'Tiền ảnh lẻ tháng 10' },
-  { id: 'adv-10', month: '2026-10', employeeId: 'duong', date: '18/10', type: 'advance', amount: 2000000, note: 'Ứng lương giữa tháng 10' },
-  { id: 'adv-11', month: '2026-10', employeeId: 'linh', date: '21/10', type: 'advance', amount: 1000000, note: 'Ứng lương tháng 10' },
-  { id: 'adv-12', month: '2026-11', employeeId: 'duong', date: '12/11', type: 'advance', amount: 2000000, note: 'Ứng lương tháng 11' },
-  { id: 'adv-13', month: '2026-11', employeeId: 'linh', date: '14/11', type: 'photo_fee', amount: 85000, note: 'Tiền ảnh tháng 11' },
-];
-
-export const INITIAL_EXPENSES = [
-  { id: 'exp-1', month: '2026-08', date: '05/08', employeeId: 'thuy', category: 'Vật tư xưởng', note: 'Keo 502, băng keo trong, đinh ghim khung', amount: 529000, reimburse: true },
-  { id: 'exp-2', month: '2026-08', date: '14/08', employeeId: 'thuy', category: 'Cước vận chuyển', note: 'Cước xe nhận phôi khung từ kho', amount: 480000, reimburse: true },
-  { id: 'exp-3', month: '2026-08', date: '24/08', employeeId: 'thuy', category: 'Đổ xăng', note: 'Đổ xăng xe giao hàng nội thành', amount: 220000, reimburse: true },
-  { id: 'exp-4', month: '2026-08', date: '29/08', employeeId: 'thuy', category: 'Ăn uống', note: 'Nước uống & ăn nhẹ tăng ca đóng hàng', amount: 180000, reimburse: true },
-  { id: 'exp-5', month: '2026-09', date: '06/09', employeeId: 'thuy', category: 'Vật tư xưởng', note: 'Giấy in ảnh lụa & màng cán bóng', amount: 689000, reimburse: true },
-  { id: 'exp-6', month: '2026-09', date: '15/09', employeeId: 'thuy', category: 'Đổ xăng', note: 'Đổ xăng đi gửi chành xe', amount: 250000, reimburse: true },
-  { id: 'exp-7', month: '2026-09', date: '23/09', employeeId: 'thuy', category: 'Cước vận chuyển', note: 'Cước nhận kiện mika & nẹp khung', amount: 350000, reimburse: true },
-  { id: 'exp-8', month: '2026-10', date: '04/10', employeeId: 'thuy', category: 'Vật tư xưởng', note: 'Mua 10 lọ keo 502, góc nhựa bảo vệ khung', amount: 644000, reimburse: true },
-  { id: 'exp-9', month: '2026-10', date: '16/10', employeeId: 'thuy', category: 'Cước vận chuyển', note: 'Cước xe tải giao đơn sỉ khách sạn', amount: 650000, reimburse: true },
-  { id: 'exp-10', month: '2026-10', date: '26/10', employeeId: 'thuy', category: 'Đổ xăng', note: 'Đổ xăng xe giao hàng tuần 4', amount: 280000, reimburse: true },
-  { id: 'exp-11', month: '2026-11', date: '03/11', employeeId: 'thuy', category: 'Vật tư xưởng', note: 'Băng keo xốp 2 mặt & móc treo tranh', amount: 390000, reimburse: true },
-  { id: 'exp-12', month: '2026-11', date: '10/11', employeeId: 'lep', category: 'Đổ xăng', note: 'Đổ xăng xe máy đi giao tranh khách lẻ', amount: 120000, reimburse: true },
-  { id: 'exp-13', month: '2026-11', date: '17/11', employeeId: 'thuy', category: 'Đổ xăng', note: 'Đổ xăng giao hàng & lấy vật tư', amount: 150000, reimburse: true },
-  { id: 'exp-14', month: '2026-11', date: '18/11', employeeId: 'fund', category: 'Ăn uống', note: 'Liên hoan nhẹ giữa tháng từ quỹ xưởng', amount: 320000, reimburse: false },
-];
+const sumAmount = (items) => items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
 /**
  * Công thức tính lương chuẩn 30 ngày công:
  * - dayRate = baseSalary / 30
  * - basePayByDays = dayRate * totalDays (tháng 31 ngày làm đủ 31 công sẽ > baseSalary)
- * - netSalary = basePayByDays - totalAdvances - totalPhotoFee + totalReimbursements
+ * - netWorkSalary = làm tròn nghìn (dayRate * totalDays - totalAdvances - totalPhotoFee)
+ * - netSalary (số thực trả) = netWorkSalary + totalReimbursements (chỉ người chi tiền có khoản này)
  */
 export const calculateEmployeeMonthPayroll = (
   emp,
@@ -296,51 +220,31 @@ export const calculateEmployeeMonthPayroll = (
   advancesList = [],
   expensesList = []
 ) => {
-  if (!emp) {
-    return {
-      baseSalary: 0,
-      dayRate: 0,
-      totalDays: 0,
-      basePayByDays: 0,
-      empAdvances: [],
-      totalAdvances: 0,
-      empPhotoFees: [],
-      totalPhotoFee: 0,
-      empReimbursements: [],
-      totalReimbursements: 0,
-      netSalary: 0,
-      attendanceMap: {},
-    };
-  }
+  const monthAtt = (emp && attendanceData[monthKey]?.[emp.id]) || {};
+  const totalDays = Object.values(monthAtt).reduce((sum, val) => sum + (Number(val) || 0), 0);
 
-  const monthAtt = attendanceData[monthKey]?.[emp.id] || {};
-  const totalDays = Object.values(monthAtt).reduce(
-    (sum, val) => sum + (Number(val) || 0),
-    0
-  );
-
-  const histSalary = HISTORICAL_BASE_SALARY[monthKey]?.[emp.id];
-  const baseSalary = histSalary !== undefined ? histSalary : emp.baseSalary;
-
+  const baseSalary = getBaseSalaryForMonth(emp, monthKey);
   const dayRate = baseSalary / STANDARD_WORK_DAYS;
   const basePayByDays = Math.round(dayRate * totalDays);
 
-  const empAdvances = advancesList.filter(
-    (a) => a.month === monthKey && a.employeeId === emp.id && a.type === 'advance'
-  );
-  const totalAdvances = empAdvances.reduce((sum, a) => sum + a.amount, 0);
-
-  const empPhotoFees = advancesList.filter(
-    (a) => a.month === monthKey && a.employeeId === emp.id && a.type === 'photo_fee'
-  );
-  const totalPhotoFee = empPhotoFees.reduce((sum, a) => sum + a.amount, 0);
-
+  const ofThisEmployeeMonth = (item) => emp && item.month === monthKey && item.employeeId === emp.id;
+  const empAdvances = advancesList.filter((a) => ofThisEmployeeMonth(a) && a.type === 'advance');
+  const empPhotoFees = advancesList.filter((a) => ofThisEmployeeMonth(a) && a.type === 'photo_fee');
+  // Khoản chi "hoàn vào lương" được cộng cho NGƯỜI CHI tiền (payerId), không phải người mua —
+  // giống bảng lương tổng: mục "Chi Tiêu" của người chi = tổng các khoản họ đã chi hộ xưởng.
   const empReimbursements = expensesList.filter(
-    (e) => e.month === monthKey && e.employeeId === emp.id && e.reimburse
+    (e) => emp && e.month === monthKey && e.reimburse && e.payerId === emp.id
   );
-  const totalReimbursements = empReimbursements.reduce((sum, e) => sum + e.amount, 0);
 
-  const netSalary = basePayByDays - totalAdvances - totalPhotoFee + totalReimbursements;
+  const totalAdvances = sumAmount(empAdvances);
+  const totalPhotoFee = sumAmount(empPhotoFees);
+  const totalReimbursements = sumAmount(empReimbursements);
+
+  // Cùng công thức với file Excel: "Lương thực nhận" = ROUND((lương/30)*công − ứng − ảnh, -3),
+  // "Lương + Chi tiêu" = lương thực nhận + tiền hoàn chi. Dùng dayRate * totalDays chưa làm tròn
+  // để web và Excel ra đúng 1 con số.
+  const netWorkSalary = roundNetSalary(dayRate * totalDays - totalAdvances - totalPhotoFee);
+  const netSalary = netWorkSalary + totalReimbursements;
 
   return {
     baseSalary,
@@ -353,8 +257,8 @@ export const calculateEmployeeMonthPayroll = (
     totalPhotoFee,
     empReimbursements,
     totalReimbursements,
+    netWorkSalary,
     netSalary,
     attendanceMap: monthAtt,
   };
 };
-

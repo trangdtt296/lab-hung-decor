@@ -1,21 +1,26 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+} from 'firebase/auth';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { firebaseAuth, firebaseDb, isFirebaseConfigured } from '../lib/firebase';
 import {
-  INITIAL_EMPLOYEES,
-  INITIAL_ATTENDANCE,
-  INITIAL_ADVANCES,
-  INITIAL_EXPENSES,
   STANDARD_WORK_DAYS,
-  DEMO_ADMIN_EMAIL,
-  DEFAULT_DEMO_PASSWORD,
-  AVAILABLE_MONTHS,
+  getCurrentMonthKey,
   getDaysInMonth,
+  buildCalendarCells,
+  formatMonthLabel,
   generateRandomSlug,
+  parseMoneyInput,
   calculateEmployeeMonthPayroll,
+  latestBaseSalary,
 } from '../lib/payroll';
 import {
   saveAttendanceDoc,
@@ -27,506 +32,415 @@ import {
   saveEmployeeDoc,
   updateEmployeeSlugDoc,
   updateEmployeeSalaryDoc,
-  seedSampleDataToFirestore,
 } from '../lib/firestoreService';
-import { exportWorkshopExcel, exportEmployeeExcel } from '../lib/exportExcel';
+import { exportWorkshopExcel, exportEmployeeExcel, getExportMonthKeys } from '../lib/exportExcel';
+import { useToast } from './useToast';
+
+const NEXT_ATTENDANCE_VALUE = { 0: 1, 1: 0.5, 0.5: 0 };
+const ATTENDANCE_LABEL = { 1: '1 công (+)', 0.5: '0.5 công (-)', 0: 'Nghỉ (•)' };
+
+const COLLECTIONS = ['employees', 'attendance', 'advances', 'expenses'];
+
+/** Lắng nghe 1 collection Firestore — luôn thay toàn bộ, kể cả khi collection trống */
+const subscribeCollection = (name, onDocs, onError) =>
+  onSnapshot(
+    collection(firebaseDb, name),
+    (snap) => onDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    onError
+  );
+
+/** Giữ đúng thứ tự trên bảng lương (Firestore mặc định trả theo id chữ cái) */
+const sortEmployees = (list) =>
+  [...list].sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+
+/** { '2026-11': { empId: { 1: 1, 2: 0.5 } } } từ các document attendance/{empId}_{monthKey} */
+const groupAttendanceDocs = (docs) => {
+  const next = {};
+  docs.forEach((data) => {
+    if (!data.employeeId) return;
+    const mKey = data.monthKey || `${data.year}-${String(data.month).padStart(2, '0')}`;
+    next[mKey] = { ...next[mKey], [data.employeeId]: data.days || {} };
+  });
+  return next;
+};
 
 export function usePayrollData() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [adminPassword, setAdminPassword] = useState(DEFAULT_DEMO_PASSWORD);
+  const [adminEmail, setAdminEmail] = useState('');
+  // Firebase cần thời gian khôi phục phiên đăng nhập; tránh nháy màn hình login khi F5.
+  // Chưa cấu hình Firebase thì không có gì để chờ (trang hiển thị lỗi cấu hình).
+  const [isAuthReady, setIsAuthReady] = useState(!isFirebaseConfigured);
+  const [loadedCollections, setLoadedCollections] = useState(() => new Set());
   const [cloudSyncStatus, setCloudSyncStatus] = useState(
-    isFirebaseConfigured ? 'Đã kết nối Firebase' : 'Chế độ xem trước (Dữ liệu mẫu)'
+    isFirebaseConfigured ? 'Đã kết nối Firebase' : 'Chưa cấu hình Firebase'
   );
 
-  const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
-  const [attendance, setAttendance] = useState(INITIAL_ATTENDANCE);
-  const [advances, setAdvances] = useState(INITIAL_ADVANCES);
-  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
+  const [employees, setEmployees] = useState([]);
+  // Giá trị cố định cho prerender; đổi sang tháng hiện tại ngay khi chạy trên client
+  const [selectedMonth, setSelectedMonth] = useState('2026-11');
+  const [attendance, setAttendance] = useState({});
+  const [advances, setAdvances] = useState([]);
+  const [expenses, setExpenses] = useState([]);
 
-  const [toast, setToast] = useState(null);
+  const { toast, showToast } = useToast();
   const [copiedEmpId, setCopiedEmpId] = useState(null);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
 
-  const showToast = useCallback((message) => {
-    setToast(message);
-    setTimeout(() => setToast(null), 3200);
-  }, []);
-
-  // Lắng nghe Firebase realtime
   useEffect(() => {
-    if (!isFirebaseConfigured || !firebaseAuth || !firebaseDb) {
-      return undefined;
-    }
-
-    const unsubAuth = onAuthStateChanged(firebaseAuth, (user) => {
-      setIsAdminAuthenticated(Boolean(user));
-    });
-
-    const unsubEmployees = onSnapshot(
-      collection(firebaseDb, 'employees'),
-      (snap) => {
-        if (snap.empty) return;
-        const list = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((item) => item.active !== false);
-        if (list.length > 0) setEmployees(list);
-      },
-      () => setCloudSyncStatus('Lỗi kết nối nhân sự Firestore')
-    );
-
-    const unsubAttendance = onSnapshot(
-      collection(firebaseDb, 'attendance'),
-      (snap) => {
-        if (snap.empty) return;
-        const nextAtt = {};
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          const mKey = data.monthKey || `${data.year}-${String(data.month).padStart(2, '0')}`;
-          if (!nextAtt[mKey]) nextAtt[mKey] = {};
-          if (data.employeeId) nextAtt[mKey][data.employeeId] = data.days || {};
-        });
-        setAttendance((prev) => ({ ...prev, ...nextAtt }));
-      },
-      () => {}
-    );
-
-    const unsubAdvances = onSnapshot(
-      collection(firebaseDb, 'advances'),
-      (snap) => {
-        if (snap.empty) return;
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setAdvances(list);
-      },
-      () => {}
-    );
-
-    const unsubExpenses = onSnapshot(
-      collection(firebaseDb, 'expenses'),
-      (snap) => {
-        if (snap.empty) return;
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setExpenses(list);
-      },
-      () => {}
-    );
-
-    return () => {
-      unsubAuth();
-      unsubEmployees();
-      unsubAttendance();
-      unsubAdvances();
-      unsubExpenses();
-    };
+    // Cố ý set sau mount: tháng hiện tại phụ thuộc đồng hồ client, đọc lúc render sẽ lệch hydration
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedMonth(getCurrentMonthKey());
   }, []);
 
-  // Thao tác chấm công
-  const toggleAttendance = useCallback(
-    async (empId, day) => {
-      const currentMonthData = attendance[selectedMonth] || {};
-      const currentEmpData = currentMonthData[empId] || {};
-      const currentVal = currentEmpData[day] || 0;
-      const nextVal = currentVal === 0 ? 1 : currentVal === 1 ? 0.5 : 0;
-      const updatedEmpMap = { ...currentEmpData, [day]: nextVal };
-
-      setAttendance((prev) => ({
-        ...prev,
-        [selectedMonth]: {
-          ...(prev[selectedMonth] || {}),
-          [empId]: updatedEmpMap,
-        },
-      }));
-
+  /** Ghi Firestore; báo lỗi rõ ràng thay vì im lặng để người dùng biết dữ liệu chưa lưu */
+  const persist = useCallback(
+    async (task, successMessage) => {
       try {
-        await saveAttendanceDoc(empId, selectedMonth, updatedEmpMap);
+        await task();
+        if (successMessage) showToast(successMessage);
+        return true;
       } catch (err) {
-        console.warn('Lỗi lưu chấm công:', err);
+        console.error(err);
+        showToast('Không lưu được lên máy chủ. Kiểm tra kết nối mạng rồi thử lại.', 'error');
+        return false;
       }
     },
-    [attendance, selectedMonth]
+    [showToast]
   );
 
-  const quickMarkSingleEmployee = useCallback(
-    async (emp) => {
-      const days = getDaysInMonth(selectedMonth);
-      const targetDay = days.length;
-      const updatedEmpMap = {
-        ...(attendance[selectedMonth]?.[emp.id] || {}),
-        [targetDay]: 1,
-      };
-
-      setAttendance((prev) => ({
-        ...prev,
-        [selectedMonth]: {
-          ...(prev[selectedMonth] || {}),
-          [emp.id]: updatedEmpMap,
-        },
-      }));
-
-      try {
-        await saveAttendanceDoc(emp.id, selectedMonth, updatedEmpMap);
-      } catch (err) {
-        console.warn(err);
-      }
-
-      showToast(`Đã chấm +1 công ngày ${targetDay}/${selectedMonth.split('-')[1]} cho ${emp.name}`);
-    },
-    [attendance, selectedMonth, showToast]
-  );
-
-  const quickMarkAllToday = useCallback(async () => {
-    const days = getDaysInMonth(selectedMonth);
-    const targetDay = days.length;
-    const nextMonthMap = { ...(attendance[selectedMonth] || {}) };
-    employees.forEach((emp) => {
-      nextMonthMap[emp.id] = {
-        ...(nextMonthMap[emp.id] || {}),
-        [targetDay]: 1,
-      };
+  /* ------------------------------ Firebase realtime ------------------------------ */
+  useEffect(() => {
+    if (!isFirebaseConfigured || !firebaseAuth) return undefined;
+    return onAuthStateChanged(firebaseAuth, (user) => {
+      setIsAdminAuthenticated(Boolean(user));
+      setAdminEmail(user?.email || '');
+      setIsAuthReady(true);
     });
+  }, []);
 
-    setAttendance((prev) => ({
-      ...prev,
-      [selectedMonth]: nextMonthMap,
-    }));
+  // Chỉ mở kết nối dữ liệu khi admin đã đăng nhập (Firestore Rules chặn người chưa đăng nhập).
+  // Đăng xuất → đóng kết nối và xoá dữ liệu khỏi bộ nhớ trình duyệt.
+  useEffect(() => {
+    if (!isAdminAuthenticated || !firebaseDb) return undefined;
 
-    try {
-      await saveBatchAttendanceDoc(selectedMonth, nextMonthMap, employees);
-    } catch (err) {
-      console.warn(err);
-    }
+    const LABELS = { employees: 'nhân sự', attendance: 'chấm công', advances: 'ứng lương', expenses: 'chi tiêu' };
+    const handlers = {
+      employees: (docs) => setEmployees(sortEmployees(docs.filter((item) => item.active !== false))),
+      attendance: (docs) => setAttendance(groupAttendanceDocs(docs)),
+      advances: setAdvances,
+      expenses: setExpenses,
+    };
+    const markLoaded = (name) =>
+      setLoadedCollections((prev) => (prev.has(name) ? prev : new Set(prev).add(name)));
 
-    showToast(`Đã chấm đủ 1 công ngày ${targetDay}/${selectedMonth.split('-')[1]} cho cả xưởng!`);
-  }, [attendance, employees, selectedMonth, showToast]);
+    const unsubs = COLLECTIONS.map((name) =>
+        subscribeCollection(
+          name,
+          (docs) => {
+            handlers[name](docs);
+            markLoaded(name);
+          },
+          (err) => {
+            console.error(err);
+            markLoaded(name); // không treo màn hình tải, nhưng báo lỗi rõ ràng
+            setCloudSyncStatus(`Lỗi tải dữ liệu ${LABELS[name]} từ Firestore`);
+            showToast(`Không tải được dữ liệu ${LABELS[name]}. Kiểm tra mạng hoặc quyền truy cập.`, 'error');
+          }
+        )
+    );
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+      setEmployees([]);
+      setAttendance({});
+      setAdvances([]);
+      setExpenses([]);
+      setLoadedCollections(new Set());
+    };
+  }, [isAdminAuthenticated, showToast]);
 
-  // Thao tác ứng lương
+  const isDataReady = isFirebaseConfigured && loadedCollections.size === COLLECTIONS.length;
+
+  /* ---------------------------------- Chấm công ---------------------------------- */
+
+  /** Cập nhật 1 ngày công của 1 nhân viên trong tháng đang chọn (lạc quan) rồi lưu */
+  const writeAttendanceDay = useCallback(
+    (empId, day, value) => {
+      const updatedEmpMap = { ...(attendance[selectedMonth]?.[empId] || {}), [day]: value };
+      setAttendance((prev) => ({
+        ...prev,
+        [selectedMonth]: { ...(prev[selectedMonth] || {}), [empId]: updatedEmpMap },
+      }));
+      return persist(() => saveAttendanceDoc(empId, selectedMonth, updatedEmpMap));
+    },
+    [attendance, selectedMonth, persist]
+  );
+
+  const toggleAttendance = useCallback(
+    (empId, day) => {
+      const current = attendance[selectedMonth]?.[empId]?.[day] || 0;
+      return writeAttendanceDay(empId, day, NEXT_ATTENDANCE_VALUE[current] ?? 0);
+    },
+    [attendance, selectedMonth, writeAttendanceDay]
+  );
+
+  const setAttendanceValue = useCallback(
+    async (empId, day, value) => {
+      const ok = await writeAttendanceDay(empId, day, value);
+      if (ok) showToast(`Đã cập nhật ngày ${day}/${selectedMonth.split('-')[1]} thành ${ATTENDANCE_LABEL[value]}`);
+    },
+    [writeAttendanceDay, selectedMonth, showToast]
+  );
+
+  /** Chấm 1 công cho cả xưởng vào ngày `day` (mặc định hôm nay) */
+  const quickMarkAllToday = useCallback(
+    async (day = new Date().getDate()) => {
+      const nextMonthMap = { ...(attendance[selectedMonth] || {}) };
+      employees.forEach((emp) => {
+        nextMonthMap[emp.id] = { ...(nextMonthMap[emp.id] || {}), [day]: 1 };
+      });
+      setAttendance((prev) => ({ ...prev, [selectedMonth]: nextMonthMap }));
+      await persist(
+        () => saveBatchAttendanceDoc(selectedMonth, nextMonthMap, employees),
+        `Đã chấm 1 công ngày ${day}/${selectedMonth.split('-')[1]} cho cả xưởng`
+      );
+    },
+    [attendance, employees, selectedMonth, persist]
+  );
+
+  /* ----------------------------------- Ứng lương ----------------------------------- */
   const addAdvance = useCallback(
     async ({ employeeId, date, type, amount, note }) => {
-      const numericAmount = Number(String(amount).replace(/\D/g, ''));
-      if (!numericAmount || numericAmount <= 0) return;
-
-      const docId = 'adv-' + Date.now();
-      const newEntry = {
-        id: docId,
+      const numericAmount = parseMoneyInput(amount);
+      if (numericAmount <= 0) return;
+      const entry = {
+        id: `adv-${Date.now()}`,
         month: selectedMonth,
         employeeId,
-        date: date || '15/08',
+        date,
         type,
         amount: numericAmount,
         note: note?.trim() || (type === 'advance' ? 'Ứng lương' : 'Tiền ảnh'),
       };
-
-      setAdvances((prev) => [newEntry, ...prev]);
-
-      try {
-        await saveAdvanceDoc(newEntry);
-      } catch (err) {
-        console.warn(err);
-      }
-
-      showToast('Đã lưu khoản khấu trừ & đồng bộ phiếu lương!');
+      setAdvances((prev) => [entry, ...prev]);
+      await persist(() => saveAdvanceDoc(entry), 'Đã lưu khoản khấu trừ & cập nhật phiếu lương');
     },
-    [selectedMonth, showToast]
+    [selectedMonth, persist]
   );
 
   const deleteAdvance = useCallback(
     async (id) => {
       setAdvances((prev) => prev.filter((item) => item.id !== id));
-      try {
-        await deleteAdvanceDoc(id);
-      } catch (err) {
-        console.warn(err);
-      }
-      showToast('Đã xóa khoản mục');
+      await persist(() => deleteAdvanceDoc(id), 'Đã xoá khoản mục');
     },
-    [showToast]
+    [persist]
   );
 
-  // Thao tác chi tiêu
+  /* ----------------------------------- Chi tiêu ----------------------------------- */
   const addExpense = useCallback(
-    async ({ date, employeeId, category, note, amount, reimburse }) => {
-      const numericAmount = Number(String(amount).replace(/\D/g, ''));
-      if (!numericAmount || numericAmount <= 0) return;
-
-      const docId = 'exp-' + Date.now();
-      const newExp = {
-        id: docId,
+    async ({ date, employeeId, payerId, category, note, amount, reimburse }) => {
+      const numericAmount = parseMoneyInput(amount);
+      if (numericAmount <= 0) return;
+      const entry = {
+        id: `exp-${Date.now()}`,
         month: selectedMonth,
-        date: date || '15/08',
+        date,
         employeeId,
+        buyerId: employeeId,
+        payerId, // người chi tiền — được hoàn vào lương nếu reimburse
         category,
         note: note?.trim() || category,
         amount: numericAmount,
-        reimburse: employeeId === 'fund' ? false : reimburse,
+        reimburse: employeeId === 'fund' ? false : Boolean(reimburse),
       };
-
-      setExpenses((prev) => [newExp, ...prev]);
-
-      try {
-        await saveExpenseDoc(newExp);
-      } catch (err) {
-        console.warn(err);
-      }
-
-      showToast('Đã ghi nhận khoản chi tiêu!');
+      setExpenses((prev) => [entry, ...prev]);
+      await persist(() => saveExpenseDoc(entry), 'Đã ghi nhận khoản chi tiêu');
     },
-    [selectedMonth, showToast]
+    [selectedMonth, persist]
   );
 
   const deleteExpense = useCallback(
     async (id) => {
       setExpenses((prev) => prev.filter((item) => item.id !== id));
-      try {
-        await deleteExpenseDoc(id);
-      } catch (err) {
-        console.warn(err);
-      }
-      showToast('Đã xóa khoản chi');
+      await persist(() => deleteExpenseDoc(id), 'Đã xoá khoản chi');
     },
-    [showToast]
+    [persist]
   );
 
-  // Thao tác nhân viên
+  /* ---------------------------------- Nhân viên ---------------------------------- */
   const addEmployee = useCallback(
     async ({ name, roleLabel, baseSalary }) => {
       if (!name?.trim()) return;
-      const salaryNum = Number(String(baseSalary).replace(/\D/g, '')) || 6600000;
-      const empId = 'emp-' + Date.now();
+      const salary = parseMoneyInput(baseSalary);
       const created = {
-        id: empId,
+        id: `emp-${Date.now()}`,
         name: name.trim(),
         roleLabel: roleLabel?.trim() || 'Nhân viên xưởng',
-        baseSalary: salaryNum,
+        baseSalary: salary,
+        salaryByMonth: { [selectedMonth]: salary }, // lương có hiệu lực từ tháng đang xem
+        order: Date.now(), // nhân viên mới xếp cuối bảng lương
         slug: generateRandomSlug(name),
         active: true,
       };
-
       setEmployees((prev) => [...prev, created]);
-
-      try {
-        await saveEmployeeDoc(created);
-      } catch (err) {
-        console.warn(err);
-      }
-
-      showToast(`Đã thêm ${created.name} & tạo link riêng!`);
+      await persist(() => saveEmployeeDoc(created), `Đã thêm ${created.name} & tạo link riêng`);
     },
-    [showToast]
+    [persist, selectedMonth]
   );
 
+  /** Sửa lương: có hiệu lực từ tháng đang chọn trở đi, các tháng trước giữ nguyên */
   const saveSalaryEdit = useCallback(
     async (empId, newSalary) => {
-      const val = Number(String(newSalary).replace(/\D/g, ''));
-      if (val > 0) {
-        setEmployees((prev) =>
-          prev.map((emp) => (emp.id === empId ? { ...emp, baseSalary: val } : emp))
-        );
-        try {
-          await updateEmployeeSalaryDoc(empId, val);
-        } catch (err) {
-          console.warn(err);
-        }
-        showToast('Đã cập nhật mức lương cơ bản!');
-      }
+      const val = parseMoneyInput(newSalary);
+      const emp = employees.find((e) => e.id === empId);
+      if (val <= 0 || !emp) return;
+      const salaryByMonth = { ...(emp.salaryByMonth || {}), [selectedMonth]: val };
+      const current = latestBaseSalary(salaryByMonth, val);
+      setEmployees((prev) => prev.map((e) => (e.id === empId ? { ...e, salaryByMonth, baseSalary: current } : e)));
+      await persist(
+        () => updateEmployeeSalaryDoc(empId, selectedMonth, val, current),
+        `Đã cập nhật lương ${emp.name} từ ${formatMonthLabel(selectedMonth)}`
+      );
     },
-    [showToast]
+    [employees, selectedMonth, persist]
   );
 
   const regenerateSlug = useCallback(
     async (empId) => {
-      const empTarget = employees.find((e) => e.id === empId);
-      const nextSlug = generateRandomSlug(empTarget?.name || 'nv');
-
-      setEmployees((prev) =>
-        prev.map((emp) => (emp.id === empId ? { ...emp, slug: nextSlug } : emp))
-      );
-
-      try {
-        await updateEmployeeSlugDoc(empId, nextSlug);
-      } catch (err) {
-        console.warn(err);
-      }
-
-      showToast('Đã đổi mã link mới! Link cũ đã vô hiệu hóa.');
+      const target = employees.find((e) => e.id === empId);
+      const nextSlug = generateRandomSlug(target?.name || 'nv');
+      setEmployees((prev) => prev.map((emp) => (emp.id === empId ? { ...emp, slug: nextSlug } : emp)));
+      await persist(() => updateEmployeeSlugDoc(empId, nextSlug), 'Đã đổi link mới. Link cũ không còn dùng được.');
     },
-    [employees, showToast]
+    [employees, persist]
   );
 
   const copyEmployeeLink = useCallback(
-    (emp) => {
-      const origin =
-        typeof window !== 'undefined' && window.location?.origin
-          ? window.location.origin
-          : 'https://labhungdecor.app';
-      const fullUrl = `${origin}/e/${emp.slug}`;
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(fullUrl).catch(() => {});
+    async (emp) => {
+      const fullUrl = `${window.location.origin}/e/${emp.slug}`;
+      try {
+        await navigator.clipboard.writeText(fullUrl);
+      } catch {
+        showToast(`Không copy được, link: ${fullUrl}`, 'error');
+        return;
       }
       setCopiedEmpId(emp.id);
-      setTimeout(() => {
-        setCopiedEmpId((prev) => (prev === emp.id ? null : prev));
-      }, 2000);
+      setTimeout(() => setCopiedEmpId((prev) => (prev === emp.id ? null : prev)), 2000);
       showToast(`Đã copy link của ${emp.name}`);
     },
     [showToast]
   );
 
-  // Xác thực Admin
+  /* ---------------------------------- Xác thực ---------------------------------- */
   const loginAdmin = useCallback(
     async (email, password) => {
       const cleanEmail = email.trim().toLowerCase();
-      const cleanPassword = password.trim();
-
-      if (!cleanEmail || !cleanPassword) {
-        throw new Error('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+      if (!cleanEmail || !password) throw new Error('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+      if (!firebaseAuth) throw new Error('Chưa cấu hình Firebase.');
+      try {
+        await signInWithEmailAndPassword(firebaseAuth, cleanEmail, password);
+      } catch (err) {
+        const wrongCredential = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'];
+        if (wrongCredential.includes(err?.code)) throw new Error('Email hoặc mật khẩu không đúng.');
+        if (err?.code === 'auth/too-many-requests') throw new Error('Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau ít phút.');
+        throw new Error('Không đăng nhập được. Kiểm tra kết nối mạng rồi thử lại.');
       }
-
-      if (isFirebaseConfigured && firebaseAuth) {
-        await signInWithEmailAndPassword(firebaseAuth, cleanEmail, cleanPassword);
-        setIsAdminAuthenticated(true);
-        showToast('Đăng nhập Admin thành công qua Firebase!');
-        return;
-      }
-
-      if (cleanEmail === DEMO_ADMIN_EMAIL.toLowerCase() && cleanPassword === adminPassword) {
-        setIsAdminAuthenticated(true);
-        showToast('Đăng nhập Admin thành công!');
-      } else {
-        throw new Error(
-          `Email hoặc mật khẩu không đúng. Tài khoản demo: ${DEMO_ADMIN_EMAIL} / ${adminPassword}`
-        );
-      }
+      showToast('Đăng nhập Admin thành công');
     },
-    [adminPassword, showToast]
+    [showToast]
   );
 
   const logoutAdmin = useCallback(async () => {
-    if (isFirebaseConfigured && firebaseAuth) {
-      try {
-        await signOut(firebaseAuth);
-      } catch (err) {
-        console.warn(err);
-      }
+    try {
+      await signOut(firebaseAuth);
+    } catch (err) {
+      console.warn(err);
     }
-    setIsAdminAuthenticated(false);
     showToast('Đã đăng xuất khỏi tài khoản Admin');
   }, [showToast]);
 
-  const changeAdminPassword = useCallback((current, nextPw, confirmPw) => {
-    if (current !== adminPassword) {
+  /** Đổi mật khẩu Firebase Auth (cần xác thực lại bằng mật khẩu hiện tại) */
+  const changeAdminPassword = useCallback(async (current, nextPw, confirmPw) => {
+    const user = firebaseAuth?.currentUser;
+    if (!user?.email) throw new Error('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.');
+    if (nextPw.length < 6) throw new Error('Mật khẩu mới cần ít nhất 6 ký tự.');
+    if (nextPw !== confirmPw) throw new Error('Mật khẩu xác nhận không khớp với mật khẩu mới.');
+    try {
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, current));
+    } catch {
       throw new Error('Mật khẩu hiện tại chưa chính xác.');
     }
-    if (nextPw.length < 4) {
-      throw new Error('Mật khẩu mới cần ít nhất 4 ký tự.');
-    }
-    if (nextPw !== confirmPw) {
-      throw new Error('Mật khẩu xác nhận không khớp với mật khẩu mới.');
-    }
-    setAdminPassword(nextPw);
-  }, [adminPassword]);
+    await updatePassword(user, nextPw);
+  }, []);
 
-  const seedSampleData = useCallback(async () => {
-    try {
-      await seedSampleDataToFirestore(employees, attendance, advances, expenses);
-      showToast('Đã đẩy dữ liệu mẫu lên Firestore thành công!');
-    } catch {
-      showToast('Không thể đẩy dữ liệu mẫu. Hãy kiểm tra quyền ghi Firestore.');
-    }
-  }, [employees, attendance, advances, expenses, showToast]);
-
-  // Xuất file Excel
-  const handleExportWorkshop = useCallback(
-    async (mode = 'single') => {
+  /* --------------------------------- Xuất Excel --------------------------------- */
+  const runExport = useCallback(
+    async (task, errorMessage) => {
       setIsExportingExcel(true);
       try {
-        const fileName = await exportWorkshopExcel(
-          mode,
-          selectedMonth,
-          employees,
-          attendance,
-          advances,
-          expenses
-        );
-        showToast(`Đã tải xuống file ${fileName}`);
+        const fileName = await task();
+        showToast(`Đã tải xuống ${fileName}`);
       } catch (err) {
         console.error(err);
-        showToast('Có lỗi khi xuất Excel xưởng, vui lòng thử lại!');
+        showToast(errorMessage, 'error');
       } finally {
         setIsExportingExcel(false);
       }
     },
-    [selectedMonth, employees, attendance, advances, expenses, showToast]
+    [showToast]
+  );
+
+  const handleExportWorkshop = useCallback(
+    (mode = 'single') =>
+      runExport(
+        () => exportWorkshopExcel(mode, selectedMonth, employees, attendance, advances, expenses),
+        'Có lỗi khi xuất Excel xưởng, vui lòng thử lại!'
+      ),
+    [runExport, selectedMonth, employees, attendance, advances, expenses]
   );
 
   const handleExportEmployee = useCallback(
-    async (emp) => {
-      setIsExportingExcel(true);
-      try {
-        const fileName = await exportEmployeeExcel(
-          emp,
-          selectedMonth,
-          attendance,
-          advances,
-          expenses
-        );
-        showToast(`Đã tải xuống bảng lương Excel của ${emp.name}`);
-      } catch (err) {
-        console.error(err);
-        showToast('Có lỗi khi xuất Excel cá nhân, vui lòng thử lại!');
-      } finally {
-        setIsExportingExcel(false);
-      }
-    },
-    [selectedMonth, attendance, advances, expenses, showToast]
+    (emp) =>
+      runExport(
+        () => exportEmployeeExcel(emp, selectedMonth, attendance, advances, expenses),
+        'Có lỗi khi xuất Excel cá nhân, vui lòng thử lại!'
+      ),
+    [runExport, selectedMonth, attendance, advances, expenses]
   );
 
-  // Tính toán dữ liệu phái sinh
+  /* ------------------------------ Dữ liệu phái sinh ------------------------------ */
   const currentMonthDays = useMemo(() => getDaysInMonth(selectedMonth), [selectedMonth]);
+  const calendarCells = useMemo(() => buildCalendarCells(currentMonthDays), [currentMonthDays]);
+  const selectedMonthDisplayLabel = useMemo(() => formatMonthLabel(selectedMonth), [selectedMonth]);
+  const exportMonthKeys = useMemo(
+    () => getExportMonthKeys(selectedMonth, { attendance, advances, expenses }),
+    [selectedMonth, attendance, advances, expenses]
+  );
 
-  const calendarCells = useMemo(() => {
-    const firstDayOffset = currentMonthDays[0]?.mondayBasedIndex || 0;
-    const cells = [];
-    for (let i = 0; i < firstDayOffset; i++) {
-      cells.push(null);
-    }
-    currentMonthDays.forEach((d) => cells.push(d));
-    return cells;
-  }, [currentMonthDays]);
+  const calculatePayroll = useCallback(
+    (emp, mKey = selectedMonth) => calculateEmployeeMonthPayroll(emp, mKey, attendance, advances, expenses),
+    [selectedMonth, attendance, advances, expenses]
+  );
 
-  const monthPayrollSummary = useMemo(() => {
-    return employees.map((emp) => ({
-      employee: emp,
-      ...calculateEmployeeMonthPayroll(emp, selectedMonth, attendance, advances, expenses),
-    }));
-  }, [employees, selectedMonth, attendance, advances, expenses]);
+  const monthPayrollSummary = useMemo(
+    () => employees.map((emp) => ({ employee: emp, ...calculatePayroll(emp) })),
+    [employees, calculatePayroll]
+  );
 
   const kpiStats = useMemo(() => {
-    const totalNetPayroll = monthPayrollSummary.reduce((sum, item) => sum + item.netSalary, 0);
-    const totalWorkDays = monthPayrollSummary.reduce((sum, item) => sum + item.totalDays, 0);
-    const totalAdvances = monthPayrollSummary.reduce((sum, item) => sum + item.totalAdvances, 0);
+    const sum = (list, pick) => list.reduce((s, x) => s + (pick(x) || 0), 0);
     const monthExpenses = expenses.filter((e) => e.month === selectedMonth);
-    const totalExpenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const totalReimbursements = monthExpenses
-      .filter((e) => e.reimburse)
-      .reduce((sum, e) => sum + e.amount, 0);
-    const totalFuel = monthExpenses
-      .filter((e) => e.category === 'Đổ xăng')
-      .reduce((sum, e) => sum + e.amount, 0);
     return {
-      totalNetPayroll,
-      totalWorkDays,
-      totalAdvances,
-      totalExpenses,
-      totalReimbursements,
-      totalFuel,
+      // Giống phần tổng kết của bảng lương tổng: TỔNG CHI 1 THÁNG = còn phải trả + đã ứng
+      totalNetPayroll: sum(monthPayrollSummary, (x) => x.netSalary),
+      totalWorkDays: sum(monthPayrollSummary, (x) => x.totalDays),
+      totalAdvances: sum(monthPayrollSummary, (x) => x.totalAdvances),
+      totalMonthCost:
+        sum(monthPayrollSummary, (x) => x.netSalary) + sum(monthPayrollSummary, (x) => x.totalAdvances),
+      totalExpenses: sum(monthExpenses, (e) => e.amount),
+      totalReimbursements: sum(monthExpenses.filter((e) => e.reimburse), (e) => e.amount),
+      totalFuel: sum(monthExpenses.filter((e) => e.category === 'Đổ xăng'), (e) => e.amount),
     };
   }, [monthPayrollSummary, expenses, selectedMonth]);
-
-  const selectedMonthDisplayLabel = useMemo(() => {
-    const [yr, mo] = selectedMonth.split('-');
-    const foundMonth = AVAILABLE_MONTHS.find((m) => m.value === mo);
-    return `${foundMonth ? foundMonth.label : `Tháng ${Number(mo)}`}/${yr}`;
-  }, [selectedMonth]);
 
   return {
     employees,
@@ -537,7 +451,9 @@ export function usePayrollData() {
     advances,
     expenses,
     isAdminAuthenticated,
-    adminPassword,
+    isAuthReady,
+    isDataReady,
+    adminEmail,
     cloudSyncStatus,
     isFirebaseConfigured,
     toast,
@@ -548,11 +464,11 @@ export function usePayrollData() {
     calendarCells,
     monthPayrollSummary,
     kpiStats,
+    exportMonthKeys,
     STANDARD_WORK_DAYS,
-    DEMO_ADMIN_EMAIL,
     // Actions
     toggleAttendance,
-    quickMarkSingleEmployee,
+    setAttendanceValue,
     quickMarkAllToday,
     addAdvance,
     deleteAdvance,
@@ -565,11 +481,8 @@ export function usePayrollData() {
     loginAdmin,
     logoutAdmin,
     changeAdminPassword,
-    seedSampleData,
     handleExportWorkshop,
     handleExportEmployee,
-    calculatePayroll: (emp, mKey = selectedMonth) =>
-      calculateEmployeeMonthPayroll(emp, mKey, attendance, advances, expenses),
+    calculatePayroll,
   };
 }
-

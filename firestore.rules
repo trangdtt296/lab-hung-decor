@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Firestore Rules cho Lab Hung Decor
+//
+// - Chỉ tài khoản ADMIN mới đọc/ghi được dữ liệu. Admin = tài khoản Firebase Auth có document
+//   admins/{uid} (tạo tay trong Firebase Console, nội dung tuỳ ý, VD { email: "..." }).
+//   Không dùng "request.auth != null" vì Firebase Auth cho phép bất kỳ ai tự tạo tài khoản.
+// - Nhân viên KHÔNG truy cập Firestore trực tiếp: trang /e/{slug} gọi API server
+//   (/api/payslip/{slug}) dùng Admin SDK, chỉ trả về phiếu lương của đúng người đó.
+//
+// Áp dụng: Firebase Console → Firestore Database → Rules → dán nội dung file này → Publish
+// (hoặc `firebase deploy --only firestore:rules` nếu dùng Firebase CLI).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /{collection}/{docId} {
+      allow read, write: if isAdmin() && collection in ['employees', 'attendance', 'advances', 'expenses'];
+    }
+
+    // Danh sách admin: admin tự xem được, nhưng chỉ sửa được trong Firebase Console
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+  }
+}

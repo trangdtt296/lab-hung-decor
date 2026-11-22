@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import {
   FileSpreadsheet,
-  User,
+  Plus,
   Check,
   Copy,
   ExternalLink,
@@ -11,6 +11,8 @@ import {
   Edit3,
 } from 'lucide-react';
 import { formatVND } from '../../lib/payroll';
+import EmployeeAvatar from '../common/EmployeeAvatar';
+import ConfirmButton from '../common/ConfirmButton';
 
 export default function PayrollTab({
   monthPayrollSummary,
@@ -23,7 +25,6 @@ export default function PayrollTab({
   onOpenAddStaffModal,
   onCopyLink,
   onExportEmployeeExcel,
-  onPreviewEmployee,
   onRegenerateSlug,
   onSaveSalaryEdit,
 }) {
@@ -40,7 +41,7 @@ export default function PayrollTab({
       <div className="bg-gradient-to-r from-slate-900 to-emerald-950 text-white p-4 rounded-2xl shadow-md flex flex-wrap items-center justify-between gap-2.5">
         <div>
           <div className="text-[10px] uppercase tracking-wider text-emerald-300 font-semibold">
-            Tổng thực chi ({selectedMonthDisplayLabel} • Công chuẩn {standardWorkDays} ngày)
+            Tổng chi còn lại ({selectedMonthDisplayLabel} • Công chuẩn {standardWorkDays} ngày)
           </div>
           <div className="text-lg sm:text-2xl font-black mt-0.5 tabular-nums whitespace-nowrap">
             {formatVND(totalNetPayroll)}
@@ -58,10 +59,10 @@ export default function PayrollTab({
           <button
             type="button"
             onClick={onOpenAddStaffModal}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer transition-colors"
           >
-            <User className="w-4 h-4 shrink-0" />
-            <span>Nhân viên</span>
+            <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
+            <span>Thêm nhân viên</span>
           </button>
         </div>
       </div>
@@ -78,47 +79,58 @@ export default function PayrollTab({
             >
               <div>
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-base font-extrabold text-slate-900 break-words">
-                        {row.employee.name}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold tabular-nums whitespace-nowrap">
-                        {row.totalDays} công
-                      </span>
-                      {overBase && (
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold whitespace-nowrap">
-                          Vượt lương CB
+                  <div className="flex items-center gap-2.5">
+                    <EmployeeAvatar name={row.employee.name} size="md" />
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-base font-extrabold text-slate-900 break-words">
+                          {row.employee.name}
                         </span>
-                      )}
-                    </div>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold tabular-nums whitespace-nowrap">
+                          {row.totalDays} công
+                        </span>
+                        {overBase && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold whitespace-nowrap">
+                            Vượt lương CB
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                      <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
                       <span>Lương CB:</span>
                       {editingSalaryId === row.employee.id ? (
-                        <div className="flex items-center gap-1">
+                        <form
+                          className="flex items-center gap-1"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleSaveSalary(row.employee.id);
+                          }}
+                        >
                           <input
                             type="number"
+                            inputMode="numeric"
                             step="100000"
                             value={editingSalaryValue}
                             onChange={(e) => setEditingSalaryValue(e.target.value)}
-                            className="w-28 px-2 py-0.5 rounded border border-emerald-500 text-xs font-bold text-slate-900"
+                            onKeyDown={(e) => e.key === 'Escape' && setEditingSalaryId(null)}
+                            autoFocus
+                            className="w-28 px-2 py-1 rounded-lg border border-emerald-500 text-xs font-bold text-slate-900"
                           />
                           <button
-                            type="button"
-                            onClick={() => handleSaveSalary(row.employee.id)}
-                            className="px-2 py-0.5 rounded bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
+                            type="submit"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
                           >
                             Lưu
                           </button>
-                        </div>
+                        </form>
                       ) : (
                         <button
                           type="button"
                           onClick={() => {
                             setEditingSalaryId(row.employee.id);
-                            setEditingSalaryValue(String(row.employee.baseSalary));
+                            setEditingSalaryValue(String(row.baseSalary));
                           }}
+                          title={`Sửa lương cơ bản – áp dụng từ ${selectedMonthDisplayLabel} trở đi`}
                           className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-emerald-700 tabular-nums whitespace-nowrap cursor-pointer"
                         >
                           <span>{formatVND(row.baseSalary)}</span>
@@ -130,6 +142,7 @@ export default function PayrollTab({
                       1 ngày = {formatVND(row.dayRate)}
                     </div>
                   </div>
+                </div>
 
                   <div className="sm:text-right">
                     <div className="text-[10px] font-semibold uppercase text-slate-400">
@@ -196,23 +209,25 @@ export default function PayrollTab({
                   <span>Xuất Excel</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => onPreviewEmployee && onPreviewEmployee(row.employee.id)}
+                <a
+                  href={`/e/${row.employee.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 text-xs font-bold whitespace-nowrap cursor-pointer transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                  <span>Xem thử</span>
-                </button>
+                  <span>Xem chi tiết</span>
+                </a>
 
-                <button
-                  type="button"
-                  onClick={() => onRegenerateSlug(row.employee.id)}
-                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold whitespace-nowrap cursor-pointer"
+                <ConfirmButton
+                  onConfirm={() => onRegenerateSlug(row.employee.id)}
+                  confirmChildren="Link cũ sẽ mất – chạm lại"
+                  confirmClassName="bg-amber-500 text-white hover:bg-amber-600"
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold whitespace-nowrap"
                 >
                   <RefreshCw className="w-3.5 h-3.5 shrink-0" />
                   <span>Đổi link</span>
-                </button>
+                </ConfirmButton>
               </div>
             </div>
           );

@@ -1,157 +1,128 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
+import Modal from '../common/Modal';
+import FormField, { DayOfMonthSelect, defaultDateForMonth, inputClass, primaryButtonClass } from '../common/FormField';
 
-export default function ExpenseModal({
-  isOpen,
-  onClose,
-  employees,
-  selectedMonth,
-  onAddExpense,
-}) {
-  const [, m] = (selectedMonth || '2026-08').split('-');
+export const EXPENSE_CATEGORIES = ['Đổ xăng', 'Vật tư xưởng', 'Cước vận chuyển', 'Ăn uống', 'Khác'];
+
+/** Mount khi mở (xem page.js) nên form luôn khởi tạo lại theo tháng đang chọn */
+export default function ExpenseModal({ onClose, employees, selectedMonth, onAddExpense }) {
   const [form, setForm] = useState({
-    date: `15/${m || '08'}`,
-    employeeId: employees[0]?.id || 'thuy',
-    category: 'Đổ xăng',
+    date: defaultDateForMonth(selectedMonth),
+    // Người chi mặc định = người đứng đầu danh sách nhân viên (thứ tự trên bảng lương)
+    payerId: employees[0]?.id || '',
+    buyerId: employees[0]?.id || '',
+    category: EXPENSE_CATEGORIES[0],
     note: '',
     amount: '',
     reimburse: true,
   });
-
-  if (!isOpen) return null;
+  const [isSaving, setIsSaving] = useState(false);
+  const set = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  // Tiền hoàn chi được cộng vào lương người chi (giống mục "Chi Tiêu" trong bảng lương tổng)
+  const payer = employees.find((e) => e.id === form.payerId);
+  const isFund = form.buyerId === 'fund';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await onAddExpense(form);
-    setForm((prev) => ({ ...prev, amount: '', note: '' }));
-    onClose();
+    setIsSaving(true);
+    try {
+      await onAddExpense({ ...form, employeeId: form.buyerId });
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-extrabold text-slate-900">
-            Ghi nhận Chi tiêu / Đổ xăng
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Đóng modal"
-            className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <Modal onClose={onClose} title="Ghi nhận chi tiêu / đổ xăng" icon={<ShoppingBag className="w-5 h-5" />}>
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Danh mục">
+            <select value={form.category} onChange={set('category')} className={inputClass}>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Ngày chi">
+            <DayOfMonthSelect
+              monthKey={selectedMonth}
+              value={form.date}
+              onChange={(date) => setForm((prev) => ({ ...prev, date }))}
+            />
+          </FormField>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Danh mục
-              </label>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold"
-              >
-                <option value="Đổ xăng">Đổ xăng</option>
-                <option value="Vật tư xưởng">Vật tư xưởng</option>
-                <option value="Cước vận chuyển">Cước vận chuyển</option>
-                <option value="Ăn uống">Ăn uống</option>
-                <option value="Khác">Khác</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Ngày chi
-              </label>
-              <input
-                type="text"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Người chi
-            </label>
-            <select
-              value={form.employeeId}
-              onChange={(e) => {
-                const val = e.target.value;
-                setForm({
-                  ...form,
-                  employeeId: val,
-                  reimburse: val === 'fund' ? false : true,
-                });
-              }}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold"
-            >
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Người chi tiền">
+            <select value={form.payerId} onChange={set('payerId')} className={inputClass}>
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.name}
                 </option>
               ))}
-              <option value="fund">Quỹ chung xưởng</option>
             </select>
-          </div>
+          </FormField>
+          <FormField label="Người mua">
+            <select value={form.buyerId} onChange={set('buyerId')} className={inputClass}>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name}
+                </option>
+              ))}
+              <option value="fund">Quỹ chung</option>
+            </select>
+          </FormField>
+        </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Số tiền (VNĐ)
-            </label>
+        <FormField label="Số tiền (VNĐ)">
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1000"
+            step="1000"
+            placeholder="VD: 150000"
+            value={form.amount}
+            onChange={set('amount')}
+            className={`${inputClass} text-base font-extrabold`}
+            required
+            autoFocus
+          />
+        </FormField>
+
+        <FormField label="Nội dung">
+          <input
+            type="text"
+            placeholder="VD: Đổ xăng giao hàng, keo 502..."
+            value={form.note}
+            onChange={set('note')}
+            className={inputClass}
+          />
+        </FormField>
+
+        {!isFund && (
+          <label className="flex items-center gap-2.5 p-3 rounded-xl bg-sky-50 border border-sky-200 cursor-pointer">
             <input
-              type="number"
-              step="1000"
-              placeholder="VD: 150000"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-base font-extrabold"
-              required
-              autoFocus
+              type="checkbox"
+              checked={form.reimburse}
+              onChange={(e) => setForm((prev) => ({ ...prev, reimburse: e.target.checked }))}
+              className="w-5 h-5 accent-emerald-600"
             />
-          </div>
+            <span className="text-xs font-bold text-sky-950">
+              Hoàn vào lương cuối tháng cho người chi{payer ? ` (${payer.name})` : ''}
+            </span>
+          </label>
+        )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Nội dung</label>
-            <input
-              type="text"
-              placeholder="VD: Đổ xăng giao hàng, Keo 502..."
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
-            />
-          </div>
-
-          {form.employeeId !== 'fund' && (
-            <label className="flex items-center gap-2.5 p-3 rounded-xl bg-sky-50 border border-sky-200 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.reimburse}
-                onChange={(e) => setForm({ ...form, reimburse: e.target.checked })}
-                className="w-4 h-4 accent-emerald-600"
-              />
-              <span className="text-xs font-bold text-sky-950">
-                Hoàn vào lương cuối tháng
-              </span>
-            </label>
-          )}
-
-          <button
-            type="submit"
-            className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-md cursor-pointer"
-          >
-            Lưu khoản chi tiêu
-          </button>
-        </form>
-      </div>
-    </div>
+        <button type="submit" disabled={isSaving} className={primaryButtonClass}>
+          {isSaving ? 'Đang lưu...' : 'Lưu khoản chi tiêu'}
+        </button>
+      </form>
+    </Modal>
   );
 }
-

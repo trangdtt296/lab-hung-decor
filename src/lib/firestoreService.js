@@ -11,6 +11,7 @@ import {
   deleteDoc,
   writeBatch,
   serverTimestamp,
+  FieldPath,
 } from 'firebase/firestore';
 import { firebaseDb, isFirebaseConfigured } from './firebase';
 
@@ -94,61 +95,20 @@ export const updateEmployeeSlugDoc = async (empId, slug) => {
   });
 };
 
-export const updateEmployeeSalaryDoc = async (empId, baseSalary) => {
+/**
+ * Ghi mốc lương có hiệu lực từ `monthKey` (salaryByMonth.<monthKey>) và lương hiện hành.
+ * Dùng FieldPath vì key tháng có dấu '-'.
+ */
+export const updateEmployeeSalaryDoc = async (empId, monthKey, salary, currentBaseSalary) => {
   if (!isFirebaseConfigured || !firebaseDb) return;
-  await updateDoc(doc(firebaseDb, 'employees', empId), {
-    baseSalary,
-    updatedAt: serverTimestamp(),
-  });
-};
-
-export const seedSampleDataToFirestore = async (
-  employees = [],
-  attendance = {},
-  advances = [],
-  expenses = []
-) => {
-  if (!isFirebaseConfigured || !firebaseDb) {
-    throw new Error('Chưa cấu hình Firebase');
-  }
-
-  const batch = writeBatch(firebaseDb);
-
-  employees.forEach((emp) => {
-    batch.set(doc(firebaseDb, 'employees', emp.id), {
-      ...emp,
-      updatedAt: serverTimestamp(),
-    });
-  });
-
-  Object.entries(attendance).forEach(([mKey, empMap]) => {
-    const [yrStr, moStr] = mKey.split('-');
-    Object.entries(empMap || {}).forEach(([empId, daysMap]) => {
-      batch.set(doc(firebaseDb, 'attendance', `${empId}_${mKey}`), {
-        employeeId: empId,
-        monthKey: mKey,
-        year: Number(yrStr),
-        month: Number(moStr),
-        days: daysMap,
-        updatedAt: serverTimestamp(),
-      });
-    });
-  });
-
-  advances.forEach((adv) => {
-    batch.set(doc(firebaseDb, 'advances', adv.id), {
-      ...adv,
-      updatedAt: serverTimestamp(),
-    });
-  });
-
-  expenses.forEach((exp) => {
-    batch.set(doc(firebaseDb, 'expenses', exp.id), {
-      ...exp,
-      updatedAt: serverTimestamp(),
-    });
-  });
-
-  await batch.commit();
+  await updateDoc(
+    doc(firebaseDb, 'employees', empId),
+    new FieldPath('salaryByMonth', monthKey),
+    salary,
+    'baseSalary',
+    currentBaseSalary,
+    'updatedAt',
+    serverTimestamp()
+  );
 };
 
