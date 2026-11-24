@@ -43,7 +43,9 @@ export const computeMonthStats = (monthKey, data, currentMonthKey) => {
   };
 };
 
-/** 12 tháng của 1 năm + tổng năm + phân bổ theo hạng mục chi và theo nhân viên */
+export const FUEL_CATEGORY = 'Đổ xăng';
+
+/** 12 tháng của 1 năm + tổng năm + chi tiêu chia nhóm (đổ xăng / khác) */
 export const computeYearStats = (year, data, currentMonthKey) => {
   const months = Array.from({ length: 12 }, (_, i) => {
     const key = toMonthKey(year, i + 1);
@@ -66,36 +68,19 @@ export const computeYearStats = (year, data, currentMonthKey) => {
   totals.monthCount = activeMonths.length;
   totals.avgPerMonth = activeMonths.length ? totals.total / activeMonths.length : 0;
 
-  const byCategory = new Map();
-  months.forEach((m) =>
-    m.monthExpenses.forEach((e) => {
-      const cat = e.category || 'Khác';
-      byCategory.set(cat, (byCategory.get(cat) || 0) + (Number(e.amount) || 0));
-    })
-  );
-
-  const byEmployee = new Map();
-  months.forEach((m) =>
-    m.rows.forEach((r) => {
-      const prev = byEmployee.get(r.employee.id) || { employee: r.employee, salary: 0, days: 0, months: 0 };
-      byEmployee.set(r.employee.id, {
-        ...prev,
-        salary: prev.salary + r.salary,
-        days: prev.days + r.days,
-        months: prev.months + 1,
-      });
-    })
-  );
+  // Chi tiêu chia 2 nhóm: Đổ xăng riêng, mọi hạng mục khác gộp chung
+  const allExpenses = months.flatMap((m) => m.monthExpenses);
+  const fuel = sumAmount(allExpenses.filter((e) => e.category === FUEL_CATEGORY));
+  const expenseGroups = [
+    { key: 'fuel', label: FUEL_CATEGORY, amount: fuel },
+    { key: 'other', label: 'Chi tiêu khác', amount: totals.expenses - fuel },
+  ];
 
   return {
     year,
     months,
     totals,
-    categories: [...byCategory.entries()]
-      .map(([category, amount]) => ({ category, amount }))
-      .filter((c) => c.amount > 0)
-      .sort((a, b) => b.amount - a.amount),
-    employees: [...byEmployee.values()].sort((a, b) => b.salary - a.salary),
+    expenseGroups,
   };
 };
 

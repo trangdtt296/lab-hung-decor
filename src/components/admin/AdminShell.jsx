@@ -9,6 +9,7 @@ import { usePayroll } from './PayrollDataContext';
 import { ADMIN_TABS } from './adminTabs';
 import AccountMenu from './AccountMenu';
 import AdminLoginScreen from './AdminLoginScreen';
+import AccessDeniedScreen from './AccessDeniedScreen';
 import Toast from '../common/Toast';
 import LoadingScreen from '../common/LoadingScreen';
 import AppHeader, { HeaderButton } from '../common/AppHeader';
@@ -123,6 +124,21 @@ export default function AdminShell({ children }) {
       <div className="min-h-dvh bg-slate-100 text-slate-800 flex flex-col">
         <Toast toast={data.toast} />
         <AdminLoginScreen onLogin={data.loginAdmin} />
+      </div>
+    );
+  }
+
+  // Đăng nhập được nhưng không có quyền admin (chưa có admins/{uid}) → 401, không mở giao diện
+  if (data.adminAccess !== 'granted') {
+    return (
+      <div className="min-h-dvh bg-slate-100 text-slate-800 flex flex-col">
+        <Toast toast={data.toast} />
+        <AccessDeniedScreen
+          email={data.adminEmail}
+          isCheckError={data.adminAccess === 'error'}
+          onRetry={data.retryAdminAccess}
+          onLogout={data.logoutAdmin}
+        />
       </div>
     );
   }

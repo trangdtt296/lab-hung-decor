@@ -3,10 +3,9 @@
 import React, { useMemo } from 'react';
 import { TrendingDown, TrendingUp, Minus, BarChart3 } from 'lucide-react';
 import { AVAILABLE_YEARS, formatVND, formatMonthLabel, parseMonthKey, toMonthKey } from '../../lib/payroll';
-import { computeYearStats, formatCompactVND, percentChange } from '../../lib/dashboard';
+import { computeYearStats, formatCompactVND, percentChange, FUEL_CATEGORY } from '../../lib/dashboard';
 import { useTodayInfo } from '../../hooks/useTodayInfo';
 import { CATEGORY_STYLE, DEFAULT_CATEGORY_STYLE } from './ExpensesTab';
-import EmployeeAvatar from '../common/EmployeeAvatar';
 
 /** Màu 2 chuỗi số liệu (đã kiểm tra tách biệt cho người mù màu): Lương = emerald, Chi tiêu = indigo */
 const SERIES = {
@@ -65,132 +64,137 @@ function Legend() {
 /* ---------------------------- Biểu đồ theo tháng ---------------------------- */
 
 /**
- * Thanh ngang theo tháng, ghi sẵn số → so sánh được ngay trên mọi màn hình, không cần hover.
- * Hiện từ tháng đầu tới tháng cuối có dữ liệu trong năm.
+ * Chênh lệch so với tháng trước: % và số tiền, VD "▲ +31% · +2,8tr".
+ * Chi phí tăng = đỏ, giảm = xanh. Tháng trước = 0 thì chỉ hiện số tiền.
  */
-function MonthlyBarRows({ months, selectedMonth, onSelectMonth }) {
-  const firstIdx = months.findIndex((m) => m.hasData);
-  const lastIdx = months.length - 1 - [...months].reverse().findIndex((m) => m.hasData);
-  const rows = firstIdx === -1 ? [] : months.slice(firstIdx, lastIdx + 1);
-  const max = Math.max(1, ...rows.map((m) => m.total));
-
+function Delta({ current, previous }) {
+  if (previous === null || previous === undefined) return <span className="text-slate-400">—</span>;
+  const diff = current - previous;
+  const pct = percentChange(current, previous);
+  const roundedPct = pct === null ? null : Math.round(pct);
+  const flat = diff === 0;
+  const up = diff > 0;
+  const Icon = flat ? Minus : up ? TrendingUp : TrendingDown;
+  const tone = flat ? 'text-slate-500' : up ? 'text-rose-600' : 'text-emerald-700';
+  const sign = up ? '+' : flat ? '' : '−';
   return (
-    <ul className="mt-3 space-y-1">
-      {rows.map((m, i) => {
-        const prev = i > 0 ? rows[i - 1] : null;
-        const isSelected = m.monthKey === selectedMonth;
-        return (
-          <li key={m.monthKey}>
-            <button
-              type="button"
-              onClick={() => onSelectMonth(m.monthKey)}
-              aria-pressed={isSelected}
-              aria-label={`${formatMonthLabel(m.monthKey)}: tổng ${formatVND(m.total)}, lương ${formatVND(m.salary)}, chi tiêu ${formatVND(m.expenses)}`}
-              className={`w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-left cursor-pointer transition-colors ${
-                isSelected ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'active:bg-slate-50'
-              }`}
-            >
-              <span
-                className={`w-8 shrink-0 text-xs tabular-nums ${isSelected ? 'font-black text-emerald-700' : 'font-bold text-slate-600'}`}
-              >
-                T{m.month}
-              </span>
-              <span className="flex-1 min-w-0 flex h-4 sm:h-5 gap-[2px]" aria-hidden>
-                {m.salary > 0 && (
-                  <span
-                    className={`${SERIES.salary.bar} h-full rounded-l-[4px] ${m.expenses > 0 ? '' : 'rounded-r-[4px]'}`}
-                    style={{ width: `${(m.salary / max) * 100}%` }}
-                  />
-                )}
-                {m.expenses > 0 && (
-                  <span
-                    className={`${SERIES.expenses.bar} h-full rounded-r-[4px] ${m.salary > 0 ? '' : 'rounded-l-[4px]'}`}
-                    style={{ width: `${(m.expenses / max) * 100}%`, minWidth: 3 }}
-                  />
-                )}
-              </span>
-              {/* Tách Lương / Chi tiêu khi đủ chỗ */}
-              <span className="hidden sm:block w-20 shrink-0 text-right text-[11px] text-slate-500 tabular-nums leading-tight">
-                <span className="block">{formatCompactVND(m.salary)}</span>
-                <span className="block text-[10px] text-slate-400">lương</span>
-              </span>
-              <span className="hidden sm:block w-20 shrink-0 text-right text-[11px] text-slate-500 tabular-nums leading-tight">
-                <span className="block">{formatCompactVND(m.expenses)}</span>
-                <span className="block text-[10px] text-slate-400">chi tiêu</span>
-              </span>
-              <span className="w-16 sm:w-20 shrink-0 text-right leading-tight">
-                <span className="block text-xs font-extrabold text-slate-900 tabular-nums">
-                  {m.hasData ? formatCompactVND(m.total) : '—'}
-                </span>
-                <span className="block text-[10px]">
-                  <Change value={prev?.hasData && m.hasData ? percentChange(m.total, prev.total) : null} />
-                </span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <span className={`inline-flex items-center gap-1 font-bold tabular-nums whitespace-nowrap ${tone}`}>
+      <Icon className="w-3.5 h-3.5 shrink-0" aria-hidden />
+      {roundedPct !== null && (
+        <>
+          <span>
+            {roundedPct > 0 ? '+' : ''}
+            {roundedPct}%
+          </span>
+          <span className="opacity-50" aria-hidden>
+            ·
+          </span>
+        </>
+      )}
+      <span>
+        {sign}
+        {formatCompactVND(Math.abs(diff))}
+      </span>
+    </span>
   );
 }
 
-function MonthlyChart({ months, selectedMonth, onSelectMonth }) {
-  const lastWithData = [...months].reverse().find((m) => m.hasData);
-  const active =
-    months.find((m) => m.monthKey === selectedMonth) ||
-    lastWithData ||
-    months[0];
-  const activeIndex = months.indexOf(active);
-  const prev = activeIndex > 0 ? months[activeIndex - 1] : null;
+/**
+ * 1 cột của biểu đồ (Lương hoặc Chi tiêu): mỗi tháng 1 thanh ngang + số tiền + chênh lệch so với tháng trước.
+ * Mỗi cột dùng thang riêng (lương lớn hơn chi tiêu nhiều lần, chung thang thì thanh chi tiêu gần như biến mất).
+ */
+function SeriesPanel({ series, field, total, rows, selectedMonth, onSelectMonth }) {
+  const max = Math.max(1, ...rows.map((m) => m[field]));
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-2 px-2">
+        <h3 className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800">
+          <span className={`w-2.5 h-2.5 rounded-sm ${series.swatch}`} aria-hidden />
+          {series.label}
+        </h3>
+        <span className="text-[11px] text-slate-500 tabular-nums">
+          Cả năm <strong className="text-slate-800">{formatVND(total)}</strong>
+        </span>
+      </div>
+
+      <ul className="mt-2 space-y-1">
+        {rows.map((m, i) => {
+          const prev = i > 0 ? rows[i - 1] : null;
+          const value = m[field];
+          const isSelected = m.monthKey === selectedMonth;
+          return (
+            <li key={m.monthKey}>
+              <button
+                type="button"
+                onClick={() => onSelectMonth(m.monthKey)}
+                aria-pressed={isSelected}
+                aria-label={`${series.label} ${formatMonthLabel(m.monthKey)}: ${formatVND(value)}${
+                  prev?.hasData ? `, tháng trước ${formatVND(prev[field])}` : ''
+                }`}
+                className={`w-full flex items-center gap-2 sm:gap-3 px-2 py-1.5 rounded-xl text-left cursor-pointer transition-colors ${
+                  isSelected ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'hover:bg-slate-50 active:bg-slate-50'
+                }`}
+              >
+                <span
+                  className={`w-8 shrink-0 text-xs tabular-nums ${isSelected ? 'font-black text-emerald-700' : 'font-bold text-slate-600'}`}
+                >
+                  T{m.month}
+                </span>
+                <span className="flex-1 min-w-0 h-4 rounded-[4px] bg-slate-100" aria-hidden>
+                  {value > 0 && (
+                    <span
+                      className={`block h-full rounded-[4px] ${series.bar}`}
+                      style={{ width: `${(value / max) * 100}%`, minWidth: 3 }}
+                    />
+                  )}
+                </span>
+                <span className="w-28 shrink-0 text-right leading-tight">
+                  <span className="block text-xs font-extrabold text-slate-900 tabular-nums">
+                    {m.hasData ? formatCompactVND(value) : '—'}
+                    {m.isCurrent && <span className="ml-1 text-[9px] font-bold text-amber-600 align-middle">đang chạy</span>}
+                  </span>
+                  <span className="block text-[10px] mt-0.5">
+                    <Delta current={value} previous={prev?.hasData && m.hasData ? prev[field] : null} />
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** Biểu đồ 2 cột Lương | Chi tiêu (điện thoại: xếp dọc). Hiện từ tháng đầu tới tháng cuối có dữ liệu. */
+function MonthlyChart({ months, totals, selectedMonth, onSelectMonth }) {
+  const firstIdx = months.findIndex((m) => m.hasData);
+  const lastIdx = months.length - 1 - [...months].reverse().findIndex((m) => m.hasData);
+  const rows = firstIdx === -1 ? [] : months.slice(firstIdx, lastIdx + 1);
+  const panelProps = { rows, selectedMonth, onSelectMonth };
 
   return (
-    <section className={`${cardClass} p-3 sm:p-4`} aria-labelledby="monthly-chart-title">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="monthly-chart-title" className="text-sm font-extrabold text-slate-900">
-          Lương & chi tiêu theo tháng
-        </h2>
-        <Legend />
-      </div>
+    <section className={`${cardClass} p-2 sm:p-3`} aria-labelledby="monthly-chart-title">
+      <h2 id="monthly-chart-title" className="px-2 pt-1 text-sm font-extrabold text-slate-900">
+        Lương & chi tiêu theo tháng
+      </h2>
+      <p className="px-2 text-[11px] text-slate-500">Chênh lệch so với tháng trước: % và số tiền. Đỏ = tăng, xanh = giảm.</p>
 
-      {/* Số liệu chi tiết của tháng đang chọn */}
-      <div className="mt-3 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1.5" aria-live="polite">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold text-slate-500">
-            {formatMonthLabel(active.monthKey)}
-            {active.isCurrent && <span className="ml-1 text-amber-600">(đang chạy)</span>}
-          </div>
-          <div className="text-sm sm:text-base font-black tabular-nums text-slate-900 truncate">{formatVND(active.total)}</div>
-        </div>
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold text-slate-500">So tháng trước</div>
-          <div className="text-sm">
-            <Change value={prev?.hasData && active.hasData ? percentChange(active.total, prev.total) : null} />
-          </div>
-        </div>
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-            <span className={`w-2 h-2 rounded-sm ${SERIES.salary.swatch}`} aria-hidden /> Lương
-          </div>
-          <div className="text-xs sm:text-sm font-bold tabular-nums text-slate-800 truncate">{formatVND(active.salary)}</div>
-        </div>
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-            <span className={`w-2 h-2 rounded-sm ${SERIES.expenses.swatch}`} aria-hidden /> Chi tiêu
-          </div>
-          <div className="text-xs sm:text-sm font-bold tabular-nums text-slate-800 truncate">{formatVND(active.expenses)}</div>
+      <div className="mt-3 grid gap-4 sm:gap-3 md:grid-cols-2 md:divide-x md:divide-slate-100">
+        <SeriesPanel series={SERIES.salary} field="salary" total={totals.salary} {...panelProps} />
+        <div className="md:pl-3 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100">
+          <SeriesPanel series={SERIES.expenses} field="expenses" total={totals.expenses} {...panelProps} />
         </div>
       </div>
 
-      <MonthlyBarRows months={months} selectedMonth={selectedMonth} onSelectMonth={onSelectMonth} />
-
-      <p className="mt-2 text-[11px] text-slate-400">Bấm vào 1 tháng để xem chi tiết và chọn tháng đó cho các tab khác.</p>
+      <p className="mt-2 px-2 pb-1 text-[11px] text-slate-400">Bấm vào 1 tháng để chọn tháng đó cho các tab khác.</p>
     </section>
   );
 }
 
 /* --------------------------- Danh sách thanh ngang --------------------------- */
 
-function BarList({ title, items, emptyText, barClass, footer }) {
+function BarList({ title, items, emptyText, barClass }) {
   const max = Math.max(1, ...items.map((i) => i.value));
   return (
     <section className={`${cardClass} p-3 sm:p-4 flex flex-col`}>
@@ -218,7 +222,6 @@ function BarList({ title, items, emptyText, barClass, footer }) {
           ))}
         </ul>
       )}
-      {footer}
     </section>
   );
 }
@@ -243,12 +246,14 @@ function MonthlyTable({ months, totals, selectedMonth, onSelectMonth }) {
               <th className={th}>Lương</th>
               <th className={th}>Chi tiêu</th>
               <th className={th}>Tổng</th>
+              <th className={th}>Chênh lệch</th>
               <th className={th}>So tháng trước</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((m) => {
               const prev = months[months.indexOf(m) - 1];
+              const diff = prev?.hasData ? m.total - prev.total : null;
               return (
                 <tr
                   key={m.monthKey}
@@ -263,6 +268,9 @@ function MonthlyTable({ months, totals, selectedMonth, onSelectMonth }) {
                   <td className={`${td} text-slate-700`}>{formatVND(m.salary)}</td>
                   <td className={`${td} text-slate-700`}>{formatVND(m.expenses)}</td>
                   <td className={`${td} font-extrabold text-slate-900`}>{formatVND(m.total)}</td>
+                  <td className={`${td} font-bold ${diff > 0 ? 'text-rose-600' : diff < 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                    {diff === null ? '—' : `${diff > 0 ? '+' : diff < 0 ? '−' : ''}${formatVND(Math.abs(diff))}`}
+                  </td>
                   <td className={td}>
                     <Change value={prev?.hasData ? percentChange(m.total, prev.total) : null} />
                   </td>
@@ -277,6 +285,7 @@ function MonthlyTable({ months, totals, selectedMonth, onSelectMonth }) {
               <td className={`${td} font-bold text-slate-800`}>{formatVND(totals.salary)}</td>
               <td className={`${td} font-bold text-slate-800`}>{formatVND(totals.expenses)}</td>
               <td className={`${td} font-black text-slate-900`}>{formatVND(totals.total)}</td>
+              <td className={td} />
               <td className={td} />
             </tr>
           </tfoot>
@@ -352,7 +361,7 @@ export default function DashboardTab({ employees, attendance, advances, expenses
     [yearStats, selectedYear, data, currentMonthKey]
   );
 
-  const { totals, months, categories } = yearStats;
+  const { totals, months, expenseGroups } = yearStats;
   const prevYearTotals = yearSummaries.find((y) => y.year === selectedYear - 1);
 
   if (totals.monthCount === 0) {
@@ -398,41 +407,31 @@ export default function DashboardTab({ employees, attendance, advances, expenses
         />
       </div>
 
-      <MonthlyChart months={months} selectedMonth={selectedMonth} onSelectMonth={onSelectMonth} />
+      <MonthlyChart months={months} totals={totals} selectedMonth={selectedMonth} onSelectMonth={onSelectMonth} />
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <BarList
-          title={`Chi tiêu theo hạng mục · ${selectedYear}`}
-          barClass={SERIES.expenses.bar}
-          emptyText="Chưa có khoản chi nào trong năm."
-          items={categories.map((c) => {
-            const { Icon, className } = CATEGORY_STYLE[c.category] || DEFAULT_CATEGORY_STYLE;
-            return {
-              key: c.category,
-              label: c.category,
-              value: c.amount,
-              note: `${totals.expenses ? Math.round((c.amount / totals.expenses) * 100) : 0}%`,
-              leading: (
-                <span className={`p-1.5 rounded-lg shrink-0 ${className}`}>
-                  <Icon className="w-3.5 h-3.5" />
-                </span>
-              ),
-            };
-          })}
-        />
-        <BarList
-          title={`Lương theo nhân viên · ${selectedYear}`}
-          barClass={SERIES.salary.bar}
-          emptyText="Chưa có dữ liệu lương trong năm."
-          items={yearStats.employees.map((e) => ({
-            key: e.employee.id,
-            label: e.employee.name,
-            value: e.salary,
-            note: `${e.days} công`,
-            leading: <EmployeeAvatar name={e.employee.name} size="sm" />,
-          }))}
-        />
-      </div>
+      <BarList
+        title={`Chi tiêu năm ${selectedYear}`}
+        barClass={SERIES.expenses.bar}
+        emptyText="Chưa có khoản chi nào trong năm."
+        items={
+          totals.expenses > 0
+            ? expenseGroups.map((g) => {
+                const { Icon, className } = g.key === 'fuel' ? CATEGORY_STYLE[FUEL_CATEGORY] : DEFAULT_CATEGORY_STYLE;
+                return {
+                  key: g.key,
+                  label: g.label,
+                  value: g.amount,
+                  note: `${Math.round((g.amount / totals.expenses) * 100)}%`,
+                  leading: (
+                    <span className={`p-1.5 rounded-lg shrink-0 ${className}`}>
+                      <Icon className="w-3.5 h-3.5" />
+                    </span>
+                  ),
+                };
+              })
+            : []
+        }
+      />
 
       <MonthlyTable months={months} totals={totals} selectedMonth={selectedMonth} onSelectMonth={onSelectMonth} />
 

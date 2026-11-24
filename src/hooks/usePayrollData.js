@@ -9,7 +9,7 @@ import {
   reauthenticateWithCredential,
   updatePassword,
 } from 'firebase/auth';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { firebaseAuth, firebaseDb, isFirebaseConfigured } from '../lib/firebase';
 import {
   STANDARD_WORK_DAYS,
@@ -70,9 +70,26 @@ const groupAttendanceDocs = (docs) => {
   return next;
 };
 
+/**
+ * Tài khoản có quyền admin không: có document admins/{uid} (xem firestore.rules).
+ * 'granted' | 'denied' | 'error' (lỗi mạng... — chưa kết luận được, cho thử lại)
+ */
+const checkAdminAccess = async (uid) => {
+  try {
+    const snap = await getDoc(doc(firebaseDb, 'admins', uid));
+    return snap.exists() ? 'granted' : 'denied';
+  } catch (err) {
+    console.error(err);
+    return err?.code === 'permission-denied' ? 'denied' : 'error';
+  }
+};
+
 export function usePayrollData() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
+  // Đăng nhập được chưa đủ: phải có quyền admin mới mở giao diện & dữ liệu (null = chưa đăng nhập)
+  const [adminAccess, setAdminAccess] = useState(null);
+  const isAdmin = adminAccess === 'granted';
   // Firebase cần thời gian khôi phục phiên đăng nhập; tránh nháy màn hình login khi F5.
   // Chưa cấu hình Firebase thì không có gì để chờ (trang hiển thị lỗi cấu hình).
   const [isAuthReady, setIsAuthReady] = useState(!isFirebaseConfigured);
@@ -119,17 +136,29 @@ export function usePayrollData() {
   /* ------------------------------ Firebase realtime ------------------------------ */
   useEffect(() => {
     if (!isFirebaseConfigured || !firebaseAuth) return undefined;
-    return onAuthStateChanged(firebaseAuth, (user) => {
+    let latestRun = 0;
+    return onAuthStateChanged(firebaseAuth, async (user) => {
+      const run = ++latestRun;
+      const access = user ? await checkAdminAccess(user.uid) : null;
+      if (run !== latestRun) return; // trạng thái đăng nhập đã đổi trong lúc chờ kiểm tra
       setIsAdminAuthenticated(Boolean(user));
       setAdminEmail(user?.email || '');
+      setAdminAccess(access);
       setIsAuthReady(true);
     });
   }, []);
 
-  // Chỉ mở kết nối dữ liệu khi admin đã đăng nhập (Firestore Rules chặn người chưa đăng nhập).
+  /** Kiểm tra lại quyền (dùng khi lần kiểm tra trước lỗi mạng, hoặc vừa được cấp quyền trong Console) */
+  const retryAdminAccess = useCallback(async () => {
+    const user = firebaseAuth?.currentUser;
+    if (!user) return;
+    setAdminAccess(await checkAdminAccess(user.uid));
+  }, []);
+
+  // Chỉ mở kết nối dữ liệu khi tài khoản có quyền admin (Firestore Rules chặn mọi người khác).
   // Đăng xuất → đóng kết nối và xoá dữ liệu khỏi bộ nhớ trình duyệt.
   useEffect(() => {
-    if (!isAdminAuthenticated || !firebaseDb) return undefined;
+    if (!isAdmin || !firebaseDb) return undefined;
 
     const LABELS = { employees: 'nhân sự', attendance: 'chấm công', advances: 'ứng lương', expenses: 'chi tiêu' };
     const handlers = {
@@ -173,7 +202,7 @@ export function usePayrollData() {
       setExpenses([]);
       setLoadedCollections(new Set());
     };
-  }, [isAdminAuthenticated, showToast]);
+  }, [isAdmin, showToast]);
 
   const isDataReady = isFirebaseConfigured && loadedCollections.size === COLLECTIONS.length;
 
@@ -378,7 +407,9 @@ export function usePayrollData() {
         if (err?.code === 'auth/too-many-requests') throw new Error('Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau ít phút.');
         throw new Error('Không đăng nhập được. Kiểm tra kết nối mạng rồi thử lại.');
       }
-      showToast('Đăng nhập Admin thành công');
+      // Tài khoản chưa được cấp quyền sẽ thấy màn hình 401 — không báo "thành công"
+      const user = firebaseAuth.currentUser;
+      if (user && (await checkAdminAccess(user.uid)) === 'granted') showToast('Đăng nhập Admin thành công');
     },
     [showToast]
   );
@@ -512,6 +543,8 @@ export function usePayrollData() {
     advances,
     expenses,
     isAdminAuthenticated,
+    adminAccess,
+    retryAdminAccess,
     isAuthReady,
     isDataReady,
     adminEmail,
