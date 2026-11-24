@@ -3,7 +3,7 @@
  * Số liệu tổng hợp cho trang Tổng quan: lương & chi tiêu theo tháng, theo năm, theo hạng mục, theo nhân viên.
  * Dùng đúng công thức của bảng lương (calculateEmployeeMonthPayroll) để số khớp với tab Lương.
  */
-import { calculateEmployeeMonthPayroll, isEmployeeInMonth, toMonthKey, FIRST_MONTH_KEY } from './payroll';
+import { calculateEmployeeMonthPayroll, isEmployeeInMonth, roundNetSalary, toMonthKey, FIRST_MONTH_KEY } from './payroll';
 
 const sumAmount = (items) => items.reduce((s, x) => s + (Number(x.amount) || 0), 0);
 
@@ -66,7 +66,8 @@ export const computeYearStats = (year, data, currentMonthKey) => {
   };
   totals.total = totals.salary + totals.expenses;
   totals.monthCount = activeMonths.length;
-  totals.avgPerMonth = activeMonths.length ? totals.total / activeMonths.length : 0;
+  // Làm tròn tới nghìn đồng (cùng quy tắc với lương thực nhận)
+  totals.avgPerMonth = activeMonths.length ? roundNetSalary(totals.total / activeMonths.length) : 0;
 
   // Chi tiêu chia 2 nhóm: Đổ xăng riêng, mọi hạng mục khác gộp chung
   const allExpenses = months.flatMap((m) => m.monthExpenses);
