@@ -151,7 +151,7 @@ function EmployeeContent({ params }) {
             <Info className="w-4 h-4 mt-0.5 shrink-0 text-amber-300" aria-hidden />
             <p className="text-xs leading-relaxed">
               Số liệu tháng đang chạy có thể thay đổi cho tới khi chốt lương.{' '}
-              <strong className="text-amber-200">Nếu thấy chưa đúng, vui lòng báo lại quản lý xưởng.</strong>
+              <strong className="text-amber-200">Nếu thấy chưa đúng, vui lòng báo lại quản lý.</strong>
             </p>
           </div>
         </div>
