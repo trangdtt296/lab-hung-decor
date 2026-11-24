@@ -8,7 +8,7 @@ import {
   buildCalendarCells,
   calculateEmployeeMonthPayroll,
 } from '../lib/payroll';
-import { exportEmployeeExcel } from '../lib/exportExcel';
+import { exportEmployeeExcel, getEmployeeYearMonthKeys } from '../lib/exportExcel';
 import { useToast } from './useToast';
 
 /**
@@ -79,11 +79,21 @@ export function useEmployeePayslip(token) {
     }
   }, [showToast]);
 
-  const exportExcel = useCallback(async () => {
+  /** Các tháng có dữ liệu trong năm — hiện ở lựa chọn "Tất cả các tháng" của hộp Xuất Excel */
+  const yearMonthKeys = useMemo(
+    () =>
+      data ? getEmployeeYearMonthKeys(data.employee, selectedMonth, data.attendance, data.advances, data.expenses) : [selectedMonth],
+    [data, selectedMonth]
+  );
+
+  /** mode 'single' = chỉ tháng đang chọn, 'all' = cả năm */
+  const exportExcel = useCallback(async (mode = 'single') => {
     if (!data) return;
     setIsExportingExcel(true);
     try {
-      const fileName = await exportEmployeeExcel(data.employee, selectedMonth, data.attendance, data.advances, data.expenses);
+      const fileName = await exportEmployeeExcel(data.employee, selectedMonth, data.attendance, data.advances, data.expenses, {
+        scope: mode === 'all' ? 'year' : 'month',
+      });
       if (fileName) showToast(`Đã tải xuống ${fileName}`); // null = hộp "Lưu / Chia sẻ file" đang mở
     } catch (err) {
       console.error(err);
@@ -105,6 +115,7 @@ export function useEmployeePayslip(token) {
     toast,
     isCopied,
     isExportingExcel,
+    yearMonthKeys,
     copyLink,
     exportExcel,
   };

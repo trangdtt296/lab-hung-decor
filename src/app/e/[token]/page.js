@@ -1,14 +1,16 @@
 'use client';
 
-import React, { Suspense, use } from 'react';
+import React, { Suspense, use, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, Copy, Download } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, Info } from 'lucide-react';
 import { useEmployeePayslip } from '../../../hooks/useEmployeePayslip';
+import { formatMonthLabel } from '../../../lib/payroll';
 import EmployeeView from '../../../components/employee/EmployeeView';
 import EmployeeAvatar from '../../../components/common/EmployeeAvatar';
 import Toast from '../../../components/common/Toast';
 import LoadingScreen from '../../../components/common/LoadingScreen';
-import AppHeader, { HeaderButton } from '../../../components/common/AppHeader';
+import AppHeader, { BrandLogo, HeaderButton } from '../../../components/common/AppHeader';
+import ExportAllModal from '../../../components/modals/ExportAllModal';
 
 function NotFound({ token }) {
   return (
@@ -72,16 +74,17 @@ function EmployeeContent({ params }) {
     toast,
     isCopied,
     isExportingExcel,
+    yearMonthKeys,
     copyLink,
     exportExcel,
   } = useEmployeePayslip(token);
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-800 flex flex-col">
       <Toast toast={toast} />
 
       <AppHeader
-        maxWidth="max-w-4xl"
         leading={employee ? <EmployeeAvatar name={employee.name} size="md" /> : undefined}
         title={employee ? employee.name : 'Lab Hung Decor'}
         selectedMonth={selectedMonth}
@@ -95,13 +98,13 @@ function EmployeeContent({ params }) {
                 label={isCopied ? 'Đã copy!' : 'Copy link'}
                 onClick={copyLink}
               />
-              <HeaderButton icon={Download} label="Xuất Excel" disabled={isExportingExcel} onClick={exportExcel} />
+              <HeaderButton icon={Download} label="Xuất Excel" disabled={isExportingExcel} onClick={() => setIsExportOpen(true)} />
             </>
           )
         }
       />
 
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {status === 'loading' && <LoadingScreen fullScreen={false} message="Đang tải bảng lương..." />}
         {status === 'not_found' && <NotFound token={token} />}
         {status === 'error' && <LoadError />}
@@ -115,6 +118,44 @@ function EmployeeContent({ params }) {
           />
         )}
       </main>
+
+      {isExportOpen && employee && (
+        <ExportAllModal
+          onClose={() => setIsExportOpen(false)}
+          title="Xuất Excel phiếu lương"
+          subtitle={employee.name}
+          selectedMonthDisplayLabel={formatMonthLabel(selectedMonth)}
+          exportMonthKeys={yearMonthKeys}
+          isExporting={isExportingExcel}
+          singleDescription="Bảng chấm công và chi tiết lương của tháng đang xem"
+          allDescription={(count) => `${count} tháng có dữ liệu trong năm ${selectedMonth.slice(0, 4)}, xếp nối tiếp trong 1 file`}
+          onExport={async (mode) => {
+            await exportExcel(mode);
+            setIsExportOpen(false);
+          }}
+        />
+      )}
+
+      {/* Chân trang: thương hiệu + nhắc số liệu tháng đang chạy còn thay đổi & ai để hỏi khi thấy sai */}
+      <footer className="mt-4 bg-slate-900 text-slate-300 border-t border-slate-800 pb-[env(safe-area-inset-bottom)]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <BrandLogo />
+            <div>
+              <div className="text-sm font-extrabold text-white">Hùng Decor · Khung tranh</div>
+              <div className="text-[11px] text-slate-400">Phiếu lương cá nhân</div>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2.5 rounded-2xl bg-amber-400/10 border border-amber-400/25 px-3.5 py-2.5 md:max-w-md">
+            <Info className="w-4 h-4 mt-0.5 shrink-0 text-amber-300" aria-hidden />
+            <p className="text-xs leading-relaxed">
+              Số liệu tháng đang chạy có thể thay đổi cho tới khi chốt lương.{' '}
+              <strong className="text-amber-200">Nếu thấy chưa đúng, vui lòng báo lại quản lý xưởng.</strong>
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

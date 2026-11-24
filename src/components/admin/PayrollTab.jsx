@@ -20,7 +20,6 @@ export default function PayrollTab({
   standardWorkDays,
   copiedEmpId,
   isExportingExcel,
-  onOpenExportAllModal,
   onCopyLink,
   onExportEmployeeExcel,
   onRegenerateSlug,
@@ -36,24 +35,12 @@ export default function PayrollTab({
 
   return (
     <div className="space-y-3.5">
-      <div className="bg-gradient-to-r from-slate-900 to-emerald-950 text-white p-4 rounded-2xl shadow-md flex flex-wrap items-center justify-between gap-2.5">
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-emerald-300 font-semibold">
-            Tổng chi còn lại ({selectedMonthDisplayLabel} • Công chuẩn {standardWorkDays} ngày)
-          </div>
-          <div className="text-lg sm:text-2xl font-black mt-0.5 tabular-nums whitespace-nowrap">
-            {formatVND(totalNetPayroll)}
-          </div>
+      <div className="bg-gradient-to-r from-slate-900 to-emerald-950 text-white p-4 rounded-2xl shadow-md">
+        <div className="text-[10px] uppercase tracking-wider text-emerald-300 font-semibold">
+          Tổng chi còn lại ({selectedMonthDisplayLabel} • Công chuẩn {standardWorkDays} ngày)
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenExportAllModal}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer"
-          >
-            <Download className="w-4 h-4 shrink-0" />
-            <span>Xuất Excel</span>
-          </button>
+        <div className="text-lg sm:text-2xl font-black mt-0.5 tabular-nums whitespace-nowrap">
+          {formatVND(totalNetPayroll)}
         </div>
       </div>
 

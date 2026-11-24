@@ -517,19 +517,37 @@ export const exportWorkshopExcel = async (mode, selectedMonth, employees, attend
   return downloaded ? fileName : null; // null = đang chờ người dùng bấm lưu (trình duyệt nhúng)
 };
 
-/** Xuất bảng lương cá nhân: các tháng có dữ liệu của nhân viên trong năm, tới tháng đang chọn */
-export const exportEmployeeExcel = async (emp, selectedMonth, attendance, advances, expenses) => {
-  const own = (list) => list.filter((x) => x.employeeId === emp.id);
-  const ownAttendance = Object.fromEntries(Object.entries(attendance).filter(([, byEmp]) => byEmp?.[emp.id]));
-  const monthKeys = getMonthKeysWithData(
-    { attendance: ownAttendance, advances: own(advances), expenses: [] },
+/**
+ * Các tháng trong năm (của tháng đang chọn) mà nhân viên có dữ liệu: chấm công, ứng/trừ, hoặc chi hộ xưởng.
+ * Luôn gồm tháng đang chọn.
+ */
+export const getEmployeeYearMonthKeys = (emp, selectedMonth, attendance = {}, advances = [], expenses = []) => {
+  const year = selectedMonth.slice(0, 4);
+  const keys = new Set([
     selectedMonth,
-    { sameYearOnly: true }
-  );
+    ...Object.entries(attendance)
+      .filter(([, byEmp]) => Object.keys(byEmp?.[emp.id] || {}).length > 0)
+      .map(([monthKey]) => monthKey),
+    ...advances.filter((a) => a.employeeId === emp.id).map((a) => a.month),
+    ...expenses.filter((e) => e.reimburse && e.payerId === emp.id).map((e) => e.month),
+  ]);
+  return [...keys].filter((k) => k?.startsWith(year)).sort();
+};
+
+/**
+ * Xuất bảng lương cá nhân.
+ * - scope 'month' (mặc định): chỉ tháng đang chọn
+ * - scope 'year': mọi tháng có dữ liệu của nhân viên trong năm đang chọn, mỗi tháng 1 khối
+ */
+export const exportEmployeeExcel = async (emp, selectedMonth, attendance, advances, expenses, { scope = 'month' } = {}) => {
+  const monthKeys =
+    scope === 'year' ? getEmployeeYearMonthKeys(emp, selectedMonth, attendance, advances, expenses) : [selectedMonth];
 
   const ExcelJS = await loadExcelJS();
   const wb = buildEmployeeWorkbook(ExcelJS, emp, monthKeys, attendance, advances, expenses);
-  const fileName = `${toPlainAsciiName(emp.name)}_Bang_Luong_${parseMonthKey(selectedMonth).year}.xlsx`;
+  const { year, month } = parseMonthKey(selectedMonth);
+  const period = scope === 'year' ? year : `Thang_${month}_${year}`;
+  const fileName = `${toPlainAsciiName(emp.name)}_Bang_Luong_${period}.xlsx`;
   const downloaded = await downloadWorkbook(wb, fileName);
   return downloaded ? fileName : null;
 };

@@ -449,7 +449,7 @@ export function usePayrollData() {
   const handleExportEmployee = useCallback(
     (emp) =>
       runExport(
-        () => exportEmployeeExcel(emp, selectedMonth, attendance, advances, expenses),
+        () => exportEmployeeExcel(emp, selectedMonth, attendance, advances, expenses), // chỉ tháng đang chọn
         'Có lỗi khi xuất Excel cá nhân, vui lòng thử lại!'
       ),
     [runExport, selectedMonth, attendance, advances, expenses]

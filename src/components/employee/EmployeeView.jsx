@@ -42,6 +42,46 @@ function StatTile({ label, children }) {
   );
 }
 
+function PayrollDetail({ payroll, monthLabel, standardWorkDays }) {
+  return (
+    <section className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200 shadow-xs space-y-3">
+      <h2 className="text-sm font-extrabold text-slate-900">Chi tiết tính lương {monthLabel}</h2>
+
+      <div className="flex items-start justify-between gap-3 py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-200/70">
+        <div className="min-w-0 space-y-0.5">
+          <div className="text-xs font-bold text-slate-800">Lương theo ngày công ({payroll.totalDays} công)</div>
+          <div className="text-[11px] text-slate-500 tabular-nums break-words">
+            ({formatVND(payroll.baseSalary)} ÷ {standardWorkDays}) × {payroll.totalDays}
+          </div>
+        </div>
+        <span className="text-sm font-black text-slate-900 tabular-nums whitespace-nowrap">
+          {formatVND(payroll.basePayByDays)}
+        </span>
+      </div>
+
+      <LineItems title="Khấu trừ ứng lương" items={payroll.empAdvances} tone="amber" sign="-" describe={(x) => x.date} />
+      <LineItems title="Khấu trừ tiền ảnh" items={payroll.empPhotoFees} tone="rose" sign="-" describe={(x) => x.date} />
+      <LineItems title="Khoản trừ khác" items={payroll.empOtherDeductions} tone="rose" sign="-" describe={(x) => x.date} />
+      <LineItems
+        title="Cộng chi tiêu đã chi hộ xưởng"
+        items={payroll.empReimbursements}
+        tone="sky"
+        sign="+"
+        describe={(x) => `${x.date} (${x.category})`}
+      />
+
+      <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+        <span className="text-sm font-extrabold text-slate-900">
+          Tổng thực nhận <span className="block text-[11px] font-medium text-slate-400">Đã làm tròn đến nghìn đồng</span>
+        </span>
+        <span className="text-lg sm:text-xl font-black text-emerald-700 tabular-nums whitespace-nowrap">
+          {formatVND(payroll.netSalary)}
+        </span>
+      </div>
+    </section>
+  );
+}
+
 export default function EmployeeView({ payroll, selectedMonth, currentMonthDays, calendarCells, standardWorkDays }) {
   const todayInfo = useTodayInfo();
   const monthLabel = formatMonthLabel(selectedMonth);
@@ -99,41 +139,7 @@ export default function EmployeeView({ payroll, selectedMonth, currentMonthDays,
       </section>
 
       {/* Chi tiết tính lương */}
-      <section className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200 shadow-xs space-y-3">
-        <h2 className="text-sm font-extrabold text-slate-900">Chi tiết tính lương {monthLabel}</h2>
-
-        <div className="flex items-start justify-between gap-3 py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-200/70">
-          <div className="min-w-0 space-y-0.5">
-            <div className="text-xs font-bold text-slate-800">Lương theo ngày công ({payroll.totalDays} công)</div>
-            <div className="text-[11px] text-slate-500 tabular-nums break-words">
-              ({formatVND(payroll.baseSalary)} ÷ {standardWorkDays}) × {payroll.totalDays}
-            </div>
-          </div>
-          <span className="text-sm font-black text-slate-900 tabular-nums whitespace-nowrap">
-            {formatVND(payroll.basePayByDays)}
-          </span>
-        </div>
-
-        <LineItems title="Khấu trừ ứng lương" items={payroll.empAdvances} tone="amber" sign="-" describe={(x) => x.date} />
-        <LineItems title="Khấu trừ tiền ảnh" items={payroll.empPhotoFees} tone="rose" sign="-" describe={(x) => x.date} />
-        <LineItems title="Khoản trừ khác" items={payroll.empOtherDeductions} tone="rose" sign="-" describe={(x) => x.date} />
-        <LineItems
-          title="Cộng chi tiêu đã chi hộ xưởng"
-          items={payroll.empReimbursements}
-          tone="sky"
-          sign="+"
-          describe={(x) => `${x.date} (${x.category})`}
-        />
-
-        <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
-          <span className="text-sm font-extrabold text-slate-900">
-            Tổng thực nhận <span className="block text-[11px] font-medium text-slate-400">Đã làm tròn đến nghìn đồng</span>
-          </span>
-          <span className="text-lg sm:text-xl font-black text-emerald-700 tabular-nums whitespace-nowrap">
-            {formatVND(payroll.netSalary)}
-          </span>
-        </div>
-      </section>
+      <PayrollDetail payroll={payroll} monthLabel={monthLabel} standardWorkDays={standardWorkDays} />
     </div>
   );
 }

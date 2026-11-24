@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Download } from 'lucide-react';
@@ -15,10 +15,6 @@ import AppHeader, { HeaderButton } from '../common/AppHeader';
 import ExportAllModal from '../modals/ExportAllModal';
 import ChangePasswordModal from '../modals/ChangePasswordModal';
 import LegacyImportModal from '../modals/LegacyImportModal';
-
-/** Hành động dùng chung giữa các trang (VD mở hộp thoại Xuất Excel từ trang Lương) */
-const AdminUiContext = createContext({ openExportModal: () => {} });
-export const useAdminUi = () => useContext(AdminUiContext);
 
 const isActive = (pathname, href) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -51,7 +47,7 @@ function MobileTabBar({ pathname }) {
       aria-label="Chức năng"
       className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="grid grid-cols-4 max-w-lg mx-auto">
+      <div className="grid max-w-lg mx-auto" style={{ gridTemplateColumns: `repeat(${ADMIN_TABS.length}, minmax(0, 1fr))` }}>
         {ADMIN_TABS.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (
@@ -132,10 +128,10 @@ export default function AdminShell({ children }) {
   }
 
   // Thẻ số liệu tháng chỉ hiện ở các tab nghiệp vụ
-  const showKpis = ADMIN_TABS.some((t) => isActive(pathname, t.href));
+  const showKpis = ADMIN_TABS.some((t) => !t.hideMonthKpis && isActive(pathname, t.href));
 
   return (
-    <AdminUiContext.Provider value={{ openExportModal: () => setIsExportOpen(true) }}>
+    <>
       <div className="min-h-dvh bg-slate-100 text-slate-800 flex flex-col">
         <Toast toast={data.toast} />
 
@@ -194,10 +190,10 @@ export default function AdminShell({ children }) {
             selectedMonthDisplayLabel={data.selectedMonthDisplayLabel}
             exportMonthKeys={data.exportMonthKeys}
             isExporting={data.isExportingExcel}
-            onExportWorkshop={data.handleExportWorkshop}
+            onExport={data.handleExportWorkshop}
           />
         )}
       </div>
-    </AdminUiContext.Provider>
+    </>
   );
 }

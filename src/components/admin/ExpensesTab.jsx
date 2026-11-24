@@ -6,13 +6,13 @@ import { formatVND } from '../../lib/payroll';
 import { EXPENSE_CATEGORIES } from '../modals/ExpenseModal';
 import ConfirmButton from '../common/ConfirmButton';
 
-const CATEGORY_STYLE = {
+export const CATEGORY_STYLE = {
   'Đổ xăng': { Icon: Fuel, className: 'bg-indigo-100 text-indigo-700' },
   'Vật tư xưởng': { Icon: Package, className: 'bg-emerald-100 text-emerald-700' },
   'Cước vận chuyển': { Icon: Truck, className: 'bg-amber-100 text-amber-700' },
   'Ăn uống': { Icon: Utensils, className: 'bg-rose-100 text-rose-700' },
 };
-const DEFAULT_STYLE = { Icon: Receipt, className: 'bg-slate-100 text-slate-700' };
+export const DEFAULT_CATEGORY_STYLE = { Icon: Receipt, className: 'bg-slate-100 text-slate-700' };
 
 export default function ExpensesTab({
   expenses,
@@ -88,7 +88,7 @@ export default function ExpensesTab({
           </div>
         ) : (
           visible.map((item) => {
-            const { Icon, className } = CATEGORY_STYLE[item.category] || DEFAULT_STYLE;
+            const { Icon, className } = CATEGORY_STYLE[item.category] || DEFAULT_CATEGORY_STYLE;
             return (
               <div key={item.id} className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
                 <div className={`p-2 rounded-xl shrink-0 ${className}`}>
