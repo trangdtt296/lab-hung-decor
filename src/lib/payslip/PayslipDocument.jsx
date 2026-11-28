@@ -3,7 +3,7 @@
  * Chỉ được import động khi bấm "Xuất phiếu lương" (xem exportPayslipPdf.js) để không làm nặng trang.
  *
  * Bố cục: dải tiêu đề thương hiệu → thông tin nhân viên & kỳ lương → 4 ô chỉ số →
- * bảng THU NHẬP / KHẤU TRỪ → tổng kết + THỰC NHẬN (bằng số & bằng chữ) → bảng chấm công → chữ ký.
+ * bảng chấm công → bảng THU NHẬP / KHẤU TRỪ → tổng kết + THỰC NHẬN (bằng số & bằng chữ).
  */
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
@@ -43,8 +43,7 @@ const s = StyleSheet.create({
   },
   brandRow: { flexDirection: 'row', alignItems: 'center' },
   logo: { width: 42, height: 42, borderRadius: 12, marginRight: 12 },
-  brandName: { color: '#ffffff', fontSize: 15, fontWeight: 800, letterSpacing: 0.3 },
-  brandSub: { color: '#a7f3d0', fontSize: 8.5, marginTop: 2 },
+  brandName: { color: '#ffffff', fontSize: 17, fontWeight: 800, letterSpacing: 0.3 },
   titleBox: { alignItems: 'flex-end' },
   title: { color: '#ffffff', fontSize: 22, fontWeight: 800, letterSpacing: 2 },
   titleSub: { color: '#cbd5e1', fontSize: 9, marginTop: 3 },
@@ -154,11 +153,11 @@ const s = StyleSheet.create({
   note: { fontSize: 7.5, color: C.faint, marginTop: 6, lineHeight: 1.4 },
 
   /* Chấm công */
-  attTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, marginBottom: 5 },
+  attTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 5 },
   attTitle: { fontSize: 9.5, fontWeight: 800, color: C.ink },
   legend: { flexDirection: 'row', alignItems: 'center' },
   legendItem: { flexDirection: 'row', alignItems: 'center', marginLeft: 10 },
-  legendDot: { width: 9, height: 9, borderRadius: 2, borderWidth: 0.75, marginRight: 3 },
+  legendDot: { width: 9, height: 9, borderRadius: 1.5, borderWidth: 0.75, marginRight: 3 },
   legendText: { fontSize: 7, color: C.muted },
   attGrid: { borderLeftWidth: 1, borderTopWidth: 1, borderColor: C.line },
   attRow: { flexDirection: 'row' },
@@ -172,16 +171,8 @@ const s = StyleSheet.create({
   },
   attDay: { fontSize: 7.5, fontWeight: 700, color: C.ink },
   attWeekday: { fontSize: 6, color: C.faint },
-  attMark: { marginTop: 2, width: 16, height: 11, borderRadius: 3, borderWidth: 0.75, alignItems: 'center', justifyContent: 'center' },
+  attMark: { marginTop: 2, width: 12, height: 12, borderRadius: 2, borderWidth: 0.75, alignItems: 'center', justifyContent: 'center' },
   attMarkText: { fontSize: 7, fontWeight: 800 },
-
-  /* Chữ ký */
-  signRow: { flexDirection: 'row', marginTop: 12 },
-  signCol: { flex: 1, alignItems: 'center' },
-  signTitle: { fontSize: 9, fontWeight: 700, color: C.ink },
-  signHint: { fontSize: 7.5, color: C.faint, marginTop: 2 },
-  signSpace: { height: 30 },
-  signName: { fontSize: 9, fontWeight: 600, color: C.ink },
 
   /* Chân trang */
   footer: {
@@ -292,7 +283,6 @@ export default function PayslipDocument({ data, logoSrc }) {
             {logoSrc ? <Image src={logoSrc} style={s.logo} /> : null}
             <View>
               <Text style={s.brandName}>HÙNG DECOR</Text>
-              <Text style={s.brandSub}>Xưởng khung tranh · Lab Hung Decor</Text>
             </View>
           </View>
           <View style={s.titleBox}>
@@ -324,7 +314,7 @@ export default function PayslipDocument({ data, logoSrc }) {
             <View style={s.infoCol}>
               <Text style={s.sectionLabel}>Nhân viên</Text>
               <Text style={s.empName}>{employee.name}</Text>
-              <Text style={s.empRole}>{employee.roleLabel || 'Nhân viên xưởng'}</Text>
+              {employee.roleLabel ? <Text style={s.empRole}>{employee.roleLabel}</Text> : null}
             </View>
             <View style={[s.infoCol, s.infoColDivider]}>
               <Text style={s.sectionLabel}>Kỳ lương</Text>
@@ -347,8 +337,50 @@ export default function PayslipDocument({ data, logoSrc }) {
           <View style={s.kpiRow}>
             <Kpi label="Ngày công" value={`${totalDays} công`} hint={`Tháng có ${daysInMonth} ngày`} />
             <Kpi label="Đơn giá 1 công" value={money(dayRate)} hint={`Lương CB ÷ ${standardWorkDays}`} />
-            <Kpi label="Tổng khấu trừ" value={money(totalDeductions)} hint="Ứng lương, tiền ảnh…" />
+            <Kpi label="Tổng khấu trừ" value={money(totalDeductions)} hint="Chi tiết ở mục B" />
             <Kpi label="Thực nhận" value={money(netSalary)} hint="Đã làm tròn đến nghìn" last />
+          </View>
+
+          {/* Bảng chấm công */}
+          <View wrap={false} style={{ marginBottom: 12 }}>
+            <View style={s.attTitleRow}>
+              <Text style={s.attTitle}>Bảng chấm công {monthLabel}</Text>
+              <View style={s.legend}>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: MARKS[1].backgroundColor, borderColor: MARKS[1].borderColor }]} />
+                  <Text style={s.legendText}>+ 1 công</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: MARKS[0.5].backgroundColor, borderColor: MARKS[0.5].borderColor }]} />
+                  <Text style={s.legendText}>- nửa công</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: OFF_MARK.backgroundColor, borderColor: OFF_MARK.borderColor }]} />
+                  <Text style={s.legendText}>Nghỉ</Text>
+                </View>
+              </View>
+            </View>
+            <View style={s.attGrid}>
+              {[attendanceDays.slice(0, ATT_PER_ROW), attendanceDays.slice(ATT_PER_ROW)].map((rowDays, rowIndex) => (
+                <View key={rowIndex} style={s.attRow}>
+                  {Array.from({ length: ATT_PER_ROW }, (_, i) => {
+                    const d = rowDays[i];
+                    // Ô trống cuối hàng 2 để các cột thẳng hàng với hàng 1
+                    if (!d) return <View key={`empty-${i}`} style={[s.attCell, { backgroundColor: C.soft }]} />;
+                    const mark = MARKS[d.value] || OFF_MARK;
+                    return (
+                      <View key={d.day} style={[s.attCell, d.isSunday && { backgroundColor: '#fff1f2' }]}>
+                        <Text style={[s.attDay, d.isSunday && { color: C.sunday }]}>{d.day}</Text>
+                        <Text style={[s.attWeekday, d.isSunday && { color: C.sunday }]}>{d.weekday}</Text>
+                        <View style={[s.attMark, { backgroundColor: mark.backgroundColor, borderColor: mark.borderColor }]}>
+                          <Text style={[s.attMarkText, { color: mark.color }]}>{mark.text}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
           </View>
 
           {/* Bảng chi tiết */}
@@ -410,62 +442,6 @@ export default function PayslipDocument({ data, logoSrc }) {
             </View>
           </View>
 
-          {/* Bảng chấm công */}
-          <View wrap={false}>
-            <View style={s.attTitleRow}>
-              <Text style={s.attTitle}>Bảng chấm công {monthLabel}</Text>
-              <View style={s.legend}>
-                <View style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: MARKS[1].backgroundColor, borderColor: MARKS[1].borderColor }]} />
-                  <Text style={s.legendText}>+ 1 công</Text>
-                </View>
-                <View style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: MARKS[0.5].backgroundColor, borderColor: MARKS[0.5].borderColor }]} />
-                  <Text style={s.legendText}>- nửa công</Text>
-                </View>
-                <View style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: OFF_MARK.backgroundColor, borderColor: OFF_MARK.borderColor }]} />
-                  <Text style={s.legendText}>Nghỉ</Text>
-                </View>
-              </View>
-            </View>
-            <View style={s.attGrid}>
-              {[attendanceDays.slice(0, ATT_PER_ROW), attendanceDays.slice(ATT_PER_ROW)].map((rowDays, rowIndex) => (
-                <View key={rowIndex} style={s.attRow}>
-                  {Array.from({ length: ATT_PER_ROW }, (_, i) => {
-                    const d = rowDays[i];
-                    // Ô trống cuối hàng 2 để các cột thẳng hàng với hàng 1
-                    if (!d) return <View key={`empty-${i}`} style={[s.attCell, { backgroundColor: C.soft }]} />;
-                    const mark = MARKS[d.value] || OFF_MARK;
-                    return (
-                      <View key={d.day} style={[s.attCell, d.isSunday && { backgroundColor: '#fff1f2' }]}>
-                        <Text style={[s.attDay, d.isSunday && { color: C.sunday }]}>{d.day}</Text>
-                        <Text style={[s.attWeekday, d.isSunday && { color: C.sunday }]}>{d.weekday}</Text>
-                        <View style={[s.attMark, { backgroundColor: mark.backgroundColor, borderColor: mark.borderColor }]}>
-                          <Text style={[s.attMarkText, { color: mark.color }]}>{mark.text}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Chữ ký */}
-          <View style={s.signRow} wrap={false}>
-            <View style={s.signCol}>
-              <Text style={s.signTitle}>Người lập phiếu</Text>
-              <Text style={s.signHint}>(Ký, ghi rõ họ tên)</Text>
-              <View style={s.signSpace} />
-            </View>
-            <View style={s.signCol}>
-              <Text style={s.signTitle}>Người nhận lương</Text>
-              <Text style={s.signHint}>(Ký, ghi rõ họ tên)</Text>
-              <View style={s.signSpace} />
-              <Text style={s.signName}>{employee.name}</Text>
-            </View>
-          </View>
         </View>
 
         {/* Chân trang */}

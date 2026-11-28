@@ -1,16 +1,15 @@
 'use client';
 
-import React, { Suspense, use, useState } from 'react';
+import React, { Suspense, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, Copy, Download, FileText, Info } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Info } from 'lucide-react';
 import { useEmployeePayslip } from '../../../hooks/useEmployeePayslip';
-import { formatMonthLabel } from '../../../lib/payroll';
+import PdfFileIcon from '../../../components/common/PdfFileIcon';
 import EmployeeView from '../../../components/employee/EmployeeView';
 import EmployeeAvatar from '../../../components/common/EmployeeAvatar';
 import Toast from '../../../components/common/Toast';
 import LoadingScreen from '../../../components/common/LoadingScreen';
 import AppHeader, { BrandLogo, HeaderButton } from '../../../components/common/AppHeader';
-import ExportAllModal from '../../../components/modals/ExportAllModal';
 
 function NotFound({ token }) {
   return (
@@ -74,11 +73,9 @@ function EmployeeContent({ params }) {
     toast,
     isCopied,
     isExportingExcel,
-    yearMonthKeys,
     copyLink,
     exportPayslip,
   } = useEmployeePayslip(token);
-  const [isExportOpen, setIsExportOpen] = useState(false);
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-800 flex flex-col">
@@ -95,10 +92,11 @@ function EmployeeContent({ params }) {
               <HeaderButton
                 variant="ghost"
                 icon={isCopied ? Check : Copy}
+                iconClassName="w-5 h-5"
                 label={isCopied ? 'Đã copy!' : 'Copy link'}
                 onClick={copyLink}
               />
-              <HeaderButton icon={Download} label="Xuất phiếu lương" disabled={isExportingExcel} onClick={() => setIsExportOpen(true)} />
+              <HeaderButton icon={PdfFileIcon} iconClassName="w-5 h-5" label="Phiếu lương PDF" disabled={isExportingExcel} onClick={exportPayslip} />
             </>
           )
         }
@@ -119,33 +117,13 @@ function EmployeeContent({ params }) {
         )}
       </main>
 
-      {isExportOpen && employee && (
-        <ExportAllModal
-          onClose={() => setIsExportOpen(false)}
-          title="Xuất phiếu lương"
-          subtitle={employee.name}
-          icon={<FileText className="w-5 h-5" />}
-          selectedMonthDisplayLabel={formatMonthLabel(selectedMonth)}
-          exportMonthKeys={yearMonthKeys}
-          isExporting={isExportingExcel}
-          singleBadge="PDF"
-          allBadge="Excel"
-          singleDescription="Phiếu lương: chấm công, thu nhập, khấu trừ và thực nhận"
-          allDescription={(count) => `Tổng hợp ${count} tháng có dữ liệu trong năm ${selectedMonth.slice(0, 4)} vào 1 file`}
-          onExport={async (mode) => {
-            await exportPayslip(mode);
-            setIsExportOpen(false);
-          }}
-        />
-      )}
-
       {/* Chân trang: thương hiệu + nhắc số liệu tháng đang chạy còn thay đổi & ai để hỏi khi thấy sai */}
       <footer className="mt-4 bg-slate-900 text-slate-300 border-t border-slate-800 pb-[env(safe-area-inset-bottom)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3">
             <BrandLogo />
             <div>
-              <div className="text-sm font-extrabold text-white">Hùng Decor · Khung tranh</div>
+              <div className="text-sm font-extrabold text-white">Hùng Decor</div>
               <div className="text-[11px] text-slate-400">Phiếu lương cá nhân</div>
             </div>
           </div>

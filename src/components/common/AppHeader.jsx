@@ -15,7 +15,7 @@ export function BrandLogo({ size = 'md', priority = false }) {
   return (
     <Image
       src="/logo.jpg"
-      alt="Hùng Decor – Khung tranh"
+      alt="Hùng Decor"
       width={px}
       height={px}
       priority={priority}
@@ -25,7 +25,7 @@ export function BrandLogo({ size = 'md', priority = false }) {
 }
 
 /** Nút trên header: mobile chỉ hiện icon (label đưa vào aria-label), từ sm hiện cả chữ */
-export function HeaderButton({ icon: Icon, label, variant = 'primary', className = '', ...props }) {
+export function HeaderButton({ icon: Icon, label, variant = 'primary', className = '', iconClassName = 'w-4 h-4', ...props }) {
   const variants = {
     primary: 'bg-emerald-600 hover:bg-emerald-500 text-white',
     ghost: 'bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white',
@@ -38,7 +38,7 @@ export function HeaderButton({ icon: Icon, label, variant = 'primary', className
       className={`inline-flex items-center justify-center gap-1.5 h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer transition-colors disabled:opacity-60 ${variants[variant]} ${className}`}
       {...props}
     >
-      <Icon className="w-4 h-4 shrink-0" />
+      <Icon className={`${iconClassName} shrink-0`} />
       <span className="hidden sm:inline">{label}</span>
     </button>
   );

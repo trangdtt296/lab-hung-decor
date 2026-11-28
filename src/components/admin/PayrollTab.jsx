@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import {
-  FileText,
   Loader2,
   Check,
   Copy,
@@ -13,6 +12,7 @@ import {
 import { formatVND } from '../../lib/payroll';
 import EmployeeAvatar from '../common/EmployeeAvatar';
 import ConfirmButton from '../common/ConfirmButton';
+import PdfFileIcon from '../common/PdfFileIcon';
 
 export default function PayrollTab({
   monthPayrollSummary,
@@ -176,12 +176,12 @@ export default function PayrollTab({
                 >
                   {isCopied ? (
                     <>
-                      <Check className="w-3.5 h-3.5 shrink-0" />
+                      <Check className="w-5 h-5 shrink-0" />
                       <span>Đã copy!</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3.5 h-3.5 shrink-0" />
+                      <Copy className="w-5 h-5 shrink-0" />
                       <span>Copy link</span>
                     </>
                   )}
@@ -194,9 +194,9 @@ export default function PayrollTab({
                   className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold whitespace-nowrap disabled:opacity-60 cursor-pointer"
                 >
                   {exportingId === row.employee.id ? (
-                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                    <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
                   ) : (
-                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                    <PdfFileIcon className="w-5 h-5 shrink-0" />
                   )}
                   <span>Phiếu lương PDF</span>
                 </button>
@@ -207,7 +207,7 @@ export default function PayrollTab({
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 text-xs font-bold whitespace-nowrap cursor-pointer transition-colors"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  <ExternalLink className="w-5 h-5 shrink-0" />
                   <span>Xem chi tiết</span>
                 </a>
 
@@ -217,7 +217,7 @@ export default function PayrollTab({
                   confirmClassName="bg-amber-500 text-white hover:bg-amber-600"
                   className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold whitespace-nowrap"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                  <RefreshCw className="w-5 h-5 shrink-0" />
                   <span>Đổi link</span>
                 </ConfirmButton>
               </div>

@@ -254,7 +254,7 @@ export const parseLegacyWorkbook = (workbook, monthKeys) => {
       id: key.replace(/[^a-z0-9]/g, ''),
       key,
       name,
-      roleLabel: 'Nhân viên xưởng',
+      roleLabel: '',
       salaryByMonth,
       baseSalary: latestBaseSalary(salaryByMonth, 0),
       slug: generateRandomSlug(name),

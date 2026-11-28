@@ -79,7 +79,8 @@ export const buildPayslipData = (emp, monthKey, attendance, advances, expenses, 
   const empCode = toPlainAsciiName(emp.name).replace(/_+/g, '').toUpperCase().slice(0, 10) || 'NV';
 
   return {
-    employee: { name: emp.name, roleLabel: emp.roleLabel },
+    // Chức vụ mặc định cũ "Nhân viên xưởng" (dữ liệu đã lưu) không in lên phiếu
+    employee: { name: emp.name, roleLabel: emp.roleLabel === 'Nhân viên xưởng' ? '' : String(emp.roleLabel || '').trim() },
     monthLabel: formatMonthLabel(monthKey),
     periodLabel: `01/${pad(month)} – ${pad(days.length)}/${pad(month)}/${year}`,
     slipNo: `PL-${year}${pad(month)}-${empCode}`,

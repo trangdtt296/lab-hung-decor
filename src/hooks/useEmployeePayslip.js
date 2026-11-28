@@ -8,7 +8,6 @@ import {
   buildCalendarCells,
   calculateEmployeeMonthPayroll,
 } from '../lib/payroll';
-import { exportEmployeeExcel, getEmployeeYearMonthKeys } from '../lib/exportExcel';
 import { useToast } from './useToast';
 
 /**
@@ -79,31 +78,17 @@ export function useEmployeePayslip(token) {
     }
   }, [showToast]);
 
-  /** Các tháng có dữ liệu trong năm — hiện ở lựa chọn "Tất cả các tháng" của hộp Xuất Excel */
-  const yearMonthKeys = useMemo(
-    () =>
-      data ? getEmployeeYearMonthKeys(data.employee, selectedMonth, data.attendance, data.advances, data.expenses) : [selectedMonth],
-    [data, selectedMonth]
-  );
-
-  /** mode 'single' = phiếu lương PDF tháng đang chọn, 'all' = Excel tổng hợp cả năm */
-  const exportPayslip = useCallback(async (mode = 'single') => {
+  /** Xuất phiếu lương PDF tháng đang chọn (cùng mẫu với nút "Phiếu lương PDF" ở tab Lương của admin) */
+  const exportPayslip = useCallback(async () => {
     if (!data) return;
     setIsExportingExcel(true);
     try {
-      let fileName;
-      if (mode === 'all') {
-        fileName = await exportEmployeeExcel(data.employee, selectedMonth, data.attendance, data.advances, data.expenses, {
-          scope: 'year',
-        });
-      } else {
-        const { exportPayslipPdf } = await import('../lib/payslip/exportPayslipPdf');
-        fileName = await exportPayslipPdf(data.employee, selectedMonth, data.attendance, data.advances, data.expenses);
-      }
+      const { exportPayslipPdf } = await import('../lib/payslip/exportPayslipPdf');
+      const fileName = await exportPayslipPdf(data.employee, selectedMonth, data.attendance, data.advances, data.expenses);
       if (fileName) showToast(`Đã tải xuống ${fileName}`); // null = hộp "Lưu / Chia sẻ file" đang mở
     } catch (err) {
       console.error(err);
-      showToast(mode === 'all' ? 'Có lỗi khi xuất Excel, vui lòng thử lại!' : 'Có lỗi khi xuất phiếu lương PDF, vui lòng thử lại!', 'error');
+      showToast('Có lỗi khi xuất phiếu lương PDF, vui lòng thử lại!', 'error');
     } finally {
       setIsExportingExcel(false);
     }
@@ -121,7 +106,6 @@ export function useEmployeePayslip(token) {
     toast,
     isCopied,
     isExportingExcel,
-    yearMonthKeys,
     copyLink,
     exportPayslip,
   };

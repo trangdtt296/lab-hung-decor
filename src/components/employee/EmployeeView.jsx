@@ -11,14 +11,27 @@ const TONES = {
   sky: { title: 'text-sky-700', row: 'bg-sky-50/80 border-sky-200/70', strong: 'text-sky-950', text: 'text-sky-900', amount: 'text-sky-800' },
 };
 
-/** Danh sách khoản cộng/trừ (ứng lương, tiền ảnh, hoàn chi) */
+/** 'DD/MM' → số ngày để sắp xếp */
+const dayOf = (date) => Number(String(date || '').split('/')[0]) || 0;
+const sumAmount = (items) => items.reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+
+/** Danh sách khoản cộng/trừ (ứng lương, tiền ảnh, hoàn chi) — tiêu đề kèm tổng của nhóm */
 function LineItems({ title, items, tone, sign, describe }) {
   if (!items.length) return null;
   const t = TONES[tone];
+  const sorted = [...items].sort((a, b) => dayOf(a.date) - dayOf(b.date));
   return (
     <div className="space-y-1.5">
-      <div className={`text-[11px] font-bold uppercase tracking-wider ${t.title}`}>{title}</div>
-      {items.map((item) => (
+      <div className={`flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-wider ${t.title}`}>
+        <span>
+          {title} <span className="font-semibold normal-case tracking-normal opacity-70">({items.length} khoản)</span>
+        </span>
+        <span className="text-xs font-black tracking-normal tabular-nums whitespace-nowrap">
+          {sign}
+          {formatVND(sumAmount(items))}
+        </span>
+      </div>
+      {sorted.map((item) => (
         <div key={item.id} className={`flex items-start justify-between gap-3 text-xs px-3 py-2.5 rounded-xl border ${t.row}`}>
           <div className="min-w-0 break-words leading-relaxed">
             <span className={`font-bold ${t.strong}`}>{describe(item)}:</span> <span className={t.text}>{item.note}</span>
@@ -42,7 +55,18 @@ function StatTile({ label, children }) {
   );
 }
 
+/** 1 dòng trong khối tổng kết cuối bảng */
+function SummaryRow({ label, value, className = 'text-slate-900' }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span className="text-slate-500">{label}</span>
+      <span className={`font-extrabold tabular-nums whitespace-nowrap ${className}`}>{value}</span>
+    </div>
+  );
+}
+
 function PayrollDetail({ payroll, monthLabel, standardWorkDays }) {
+  const totalDeductions = payroll.totalAdvances + payroll.totalPhotoFee + payroll.totalOtherDeductions;
   return (
     <section className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200 shadow-xs space-y-3">
       <h2 className="text-sm font-extrabold text-slate-900">Chi tiết tính lương {monthLabel}</h2>
@@ -69,6 +93,17 @@ function PayrollDetail({ payroll, monthLabel, standardWorkDays }) {
         sign="+"
         describe={(x) => `${x.date} (${x.category})`}
       />
+
+      {/* Tổng kết: lương công − tổng khấu trừ + tổng chi hộ = thực nhận */}
+      <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5 space-y-1.5">
+        <SummaryRow label="Lương theo ngày công" value={formatVND(payroll.basePayByDays)} />
+        <SummaryRow
+          label="Tổng khấu trừ (ứng lương, tiền ảnh, khoản trừ khác)"
+          value={`-${formatVND(totalDeductions)}`}
+          className="text-rose-700"
+        />
+        <SummaryRow label="Tổng chi tiêu đã chi hộ xưởng" value={`+${formatVND(payroll.totalReimbursements)}`} className="text-sky-700" />
+      </div>
 
       <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
         <span className="text-sm font-extrabold text-slate-900">

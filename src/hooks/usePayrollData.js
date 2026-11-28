@@ -361,7 +361,7 @@ export function usePayrollData() {
       const created = {
         id: `emp-${Date.now()}`,
         name: name.trim(),
-        roleLabel: roleLabel?.trim() || 'Nhân viên xưởng',
+        roleLabel: roleLabel?.trim() || '',
         baseSalary: salary,
         salaryByMonth: { [selectedMonth]: salary }, // lương có hiệu lực từ tháng đang xem
         order: Date.now(), // nhân viên mới xếp cuối bảng lương

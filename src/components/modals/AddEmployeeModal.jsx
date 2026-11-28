@@ -9,7 +9,7 @@ const DEFAULT_SALARY = '6600000';
 
 /** Mount khi mở (xem page.js) nên form luôn trống mỗi lần mở */
 export default function AddEmployeeModal({ onClose, onAddEmployee }) {
-  const [form, setForm] = useState({ name: '', roleLabel: 'Nhân viên xưởng', baseSalary: DEFAULT_SALARY });
+  const [form, setForm] = useState({ name: '', roleLabel: '', baseSalary: DEFAULT_SALARY });
   const [isSaving, setIsSaving] = useState(false);
   const set = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
@@ -39,7 +39,7 @@ export default function AddEmployeeModal({ onClose, onAddEmployee }) {
           />
         </FormField>
         <FormField label="Vị trí / công việc">
-          <input type="text" value={form.roleLabel} onChange={set('roleLabel')} className={inputClass} />
+          <input type="text" placeholder="Không bắt buộc" value={form.roleLabel} onChange={set('roleLabel')} className={inputClass} />
         </FormField>
         <FormField label="Lương cơ bản / tháng (VNĐ)" hint="Lương 1 ngày = lương cơ bản ÷ 30">
           <input
