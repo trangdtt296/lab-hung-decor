@@ -86,18 +86,24 @@ export function useEmployeePayslip(token) {
     [data, selectedMonth]
   );
 
-  /** mode 'single' = chỉ tháng đang chọn, 'all' = cả năm */
-  const exportExcel = useCallback(async (mode = 'single') => {
+  /** mode 'single' = phiếu lương PDF tháng đang chọn, 'all' = Excel tổng hợp cả năm */
+  const exportPayslip = useCallback(async (mode = 'single') => {
     if (!data) return;
     setIsExportingExcel(true);
     try {
-      const fileName = await exportEmployeeExcel(data.employee, selectedMonth, data.attendance, data.advances, data.expenses, {
-        scope: mode === 'all' ? 'year' : 'month',
-      });
+      let fileName;
+      if (mode === 'all') {
+        fileName = await exportEmployeeExcel(data.employee, selectedMonth, data.attendance, data.advances, data.expenses, {
+          scope: 'year',
+        });
+      } else {
+        const { exportPayslipPdf } = await import('../lib/payslip/exportPayslipPdf');
+        fileName = await exportPayslipPdf(data.employee, selectedMonth, data.attendance, data.advances, data.expenses);
+      }
       if (fileName) showToast(`Đã tải xuống ${fileName}`); // null = hộp "Lưu / Chia sẻ file" đang mở
     } catch (err) {
       console.error(err);
-      showToast('Có lỗi khi xuất Excel, vui lòng thử lại!', 'error');
+      showToast(mode === 'all' ? 'Có lỗi khi xuất Excel, vui lòng thử lại!' : 'Có lỗi khi xuất phiếu lương PDF, vui lòng thử lại!', 'error');
     } finally {
       setIsExportingExcel(false);
     }
@@ -117,6 +123,6 @@ export function useEmployeePayslip(token) {
     isExportingExcel,
     yearMonthKeys,
     copyLink,
-    exportExcel,
+    exportPayslip,
   };
 }

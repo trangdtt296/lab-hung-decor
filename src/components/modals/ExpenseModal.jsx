@@ -7,18 +7,38 @@ import FormField, { DayOfMonthSelect, defaultDateForMonth, inputClass, primaryBu
 
 export const EXPENSE_CATEGORIES = ['Đổ xăng', 'Vật tư xưởng', 'Cước vận chuyển', 'Ăn uống', 'Khác'];
 
-/** Mount khi mở (xem page.js) nên form luôn khởi tạo lại theo tháng đang chọn */
-export default function ExpenseModal({ onClose, employees, selectedMonth, onAddExpense }) {
-  const [form, setForm] = useState({
-    date: defaultDateForMonth(selectedMonth),
-    // Người chi mặc định = người đứng đầu danh sách nhân viên (thứ tự trên bảng lương)
-    payerId: employees[0]?.id || '',
-    buyerId: employees[0]?.id || '',
-    category: EXPENSE_CATEGORIES[0],
-    note: '',
-    amount: '',
-    reimburse: true,
-  });
+/**
+ * Thêm mới (item = null) hoặc sửa 1 khoản chi (item = khoản đang sửa).
+ * Mount khi mở (xem page.js) nên form luôn khởi tạo lại theo tháng đang chọn / khoản đang sửa.
+ */
+export default function ExpenseModal({ onClose, employees, selectedMonth, item = null, onSave }) {
+  const isEdit = Boolean(item);
+  // Khoản đang sửa giữ nguyên tháng của nó
+  const monthKey = item?.month || selectedMonth;
+  const [form, setForm] = useState(() =>
+    item
+      ? {
+          date: item.date || defaultDateForMonth(monthKey),
+          payerId: item.payerId || item.employeeId || employees[0]?.id || '',
+          buyerId: item.buyerId || item.employeeId || employees[0]?.id || '',
+          category: item.category || EXPENSE_CATEGORIES[0],
+          note: item.note || '',
+          amount: String(item.amount ?? ''),
+          reimburse: Boolean(item.reimburse),
+        }
+      : {
+          date: defaultDateForMonth(monthKey),
+          // Người chi mặc định = người đứng đầu danh sách nhân viên (thứ tự trên bảng lương)
+          payerId: employees[0]?.id || '',
+          buyerId: employees[0]?.id || '',
+          category: EXPENSE_CATEGORIES[0],
+          note: '',
+          amount: '',
+          reimburse: true,
+        }
+  );
+  // Danh mục cũ không còn trong danh sách vẫn hiện được khi sửa
+  const categories = EXPENSE_CATEGORIES.includes(form.category) ? EXPENSE_CATEGORIES : [...EXPENSE_CATEGORIES, form.category];
   const [isSaving, setIsSaving] = useState(false);
   const set = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
   // Tiền hoàn chi được cộng vào lương người chi (giống mục "Chi Tiêu" trong bảng lương tổng)
@@ -29,20 +49,20 @@ export default function ExpenseModal({ onClose, employees, selectedMonth, onAddE
     e.preventDefault();
     setIsSaving(true);
     try {
-      await onAddExpense({ ...form, employeeId: form.buyerId });
-      onClose();
+      const ok = await onSave({ ...form, employeeId: form.buyerId });
+      if (ok !== false) onClose();
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <Modal onClose={onClose} title="Ghi nhận chi tiêu / đổ xăng" icon={<ShoppingBag className="w-5 h-5" />}>
+    <Modal onClose={onClose} title={isEdit ? 'Sửa khoản chi tiêu' : 'Ghi nhận chi tiêu / đổ xăng'} icon={<ShoppingBag className="w-5 h-5" />}>
       <form onSubmit={handleSubmit} className="space-y-3.5">
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Danh mục">
             <select value={form.category} onChange={set('category')} className={inputClass}>
-              {EXPENSE_CATEGORIES.map((c) => (
+              {categories.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
@@ -51,7 +71,7 @@ export default function ExpenseModal({ onClose, employees, selectedMonth, onAddE
           </FormField>
           <FormField label="Ngày chi">
             <DayOfMonthSelect
-              monthKey={selectedMonth}
+              monthKey={monthKey}
               value={form.date}
               onChange={(date) => setForm((prev) => ({ ...prev, date }))}
             />
@@ -91,7 +111,7 @@ export default function ExpenseModal({ onClose, employees, selectedMonth, onAddE
             onChange={set('amount')}
             className={`${inputClass} text-base font-extrabold`}
             required
-            autoFocus
+            autoFocus={!isEdit}
           />
         </FormField>
 
@@ -120,7 +140,7 @@ export default function ExpenseModal({ onClose, employees, selectedMonth, onAddE
         )}
 
         <button type="submit" disabled={isSaving} className={primaryButtonClass}>
-          {isSaving ? 'Đang lưu...' : 'Lưu khoản chi tiêu'}
+          {isSaving ? 'Đang lưu...' : isEdit ? 'Lưu thay đổi' : 'Lưu khoản chi tiêu'}
         </button>
       </form>
     </Modal>

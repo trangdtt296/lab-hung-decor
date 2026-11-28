@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import {
-  Download,
+  FileText,
+  Loader2,
   Check,
   Copy,
   ExternalLink,
@@ -21,12 +22,22 @@ export default function PayrollTab({
   copiedEmpId,
   isExportingExcel,
   onCopyLink,
-  onExportEmployeeExcel,
+  onExportEmployeePdf,
   onRegenerateSlug,
   onSaveSalaryEdit,
 }) {
   const [editingSalaryId, setEditingSalaryId] = useState(null);
   const [editingSalaryValue, setEditingSalaryValue] = useState('');
+  // Chỉ thẻ vừa bấm xuất hiện vòng xoay
+  const [exportingId, setExportingId] = useState(null);
+  const handleExportPdf = async (emp) => {
+    setExportingId(emp.id);
+    try {
+      await onExportEmployeePdf(emp);
+    } finally {
+      setExportingId(null);
+    }
+  };
 
   const handleSaveSalary = (empId) => {
     onSaveSalaryEdit(empId, editingSalaryValue);
@@ -179,11 +190,15 @@ export default function PayrollTab({
                 <button
                   type="button"
                   disabled={isExportingExcel}
-                  onClick={() => onExportEmployeeExcel(row.employee)}
+                  onClick={() => handleExportPdf(row.employee)}
                   className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold whitespace-nowrap disabled:opacity-60 cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5 shrink-0" />
-                  <span>Xuất Excel</span>
+                  {exportingId === row.employee.id ? (
+                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                  ) : (
+                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  <span>Phiếu lương PDF</span>
                 </button>
 
                 <a

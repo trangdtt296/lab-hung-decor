@@ -2,7 +2,7 @@
 
 import React, { Suspense, use, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, Copy, Download, Info } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, FileText, Info } from 'lucide-react';
 import { useEmployeePayslip } from '../../../hooks/useEmployeePayslip';
 import { formatMonthLabel } from '../../../lib/payroll';
 import EmployeeView from '../../../components/employee/EmployeeView';
@@ -76,7 +76,7 @@ function EmployeeContent({ params }) {
     isExportingExcel,
     yearMonthKeys,
     copyLink,
-    exportExcel,
+    exportPayslip,
   } = useEmployeePayslip(token);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
@@ -98,7 +98,7 @@ function EmployeeContent({ params }) {
                 label={isCopied ? 'Đã copy!' : 'Copy link'}
                 onClick={copyLink}
               />
-              <HeaderButton icon={Download} label="Xuất Excel" disabled={isExportingExcel} onClick={() => setIsExportOpen(true)} />
+              <HeaderButton icon={Download} label="Xuất phiếu lương" disabled={isExportingExcel} onClick={() => setIsExportOpen(true)} />
             </>
           )
         }
@@ -122,15 +122,18 @@ function EmployeeContent({ params }) {
       {isExportOpen && employee && (
         <ExportAllModal
           onClose={() => setIsExportOpen(false)}
-          title="Xuất Excel phiếu lương"
+          title="Xuất phiếu lương"
           subtitle={employee.name}
+          icon={<FileText className="w-5 h-5" />}
           selectedMonthDisplayLabel={formatMonthLabel(selectedMonth)}
           exportMonthKeys={yearMonthKeys}
           isExporting={isExportingExcel}
-          singleDescription="Bảng chấm công và chi tiết lương của tháng đang xem"
-          allDescription={(count) => `${count} tháng có dữ liệu trong năm ${selectedMonth.slice(0, 4)}, xếp nối tiếp trong 1 file`}
+          singleBadge="PDF"
+          allBadge="Excel"
+          singleDescription="Phiếu lương: chấm công, thu nhập, khấu trừ và thực nhận"
+          allDescription={(count) => `Tổng hợp ${count} tháng có dữ liệu trong năm ${selectedMonth.slice(0, 4)} vào 1 file`}
           onExport={async (mode) => {
-            await exportExcel(mode);
+            await exportPayslip(mode);
             setIsExportOpen(false);
           }}
         />

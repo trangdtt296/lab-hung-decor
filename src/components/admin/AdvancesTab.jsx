@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { formatVND } from '../../lib/payroll';
 import ConfirmButton from '../common/ConfirmButton';
 
@@ -11,7 +11,7 @@ const TYPE_BADGE = {
   other_deduction: { label: 'Khoản trừ khác', className: 'bg-slate-200 text-slate-800' },
 };
 
-export default function AdvancesTab({ advances, employees, selectedMonth, totalAdvances, onOpenAddAdvance, onDeleteAdvance }) {
+export default function AdvancesTab({ advances, employees, selectedMonth, totalAdvances, onOpenAddAdvance, onEditAdvance, onDeleteAdvance }) {
   const monthAdvances = advances.filter((a) => a.month === selectedMonth);
 
   return (
@@ -55,10 +55,19 @@ export default function AdvancesTab({ advances, employees, selectedMonth, totalA
                   {item.note && <div className="text-xs text-slate-600 break-words leading-relaxed">{item.note}</div>}
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-sm font-extrabold text-slate-900 tabular-nums whitespace-nowrap">
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <span className="text-sm font-extrabold text-slate-900 tabular-nums whitespace-nowrap mr-1">
                     -{formatVND(item.amount)}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => onEditAdvance(item)}
+                    aria-label="Sửa khoản mục"
+                    title="Sửa"
+                    className="h-9 w-9 rounded-xl text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 inline-flex items-center justify-center cursor-pointer"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
                   <ConfirmButton
                     onConfirm={() => onDeleteAdvance(item.id)}
                     aria-label="Xoá khoản mục"

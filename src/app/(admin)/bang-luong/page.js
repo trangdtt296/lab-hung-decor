@@ -16,7 +16,7 @@ export default function PayrollPage() {
       copiedEmpId={data.copiedEmpId}
       isExportingExcel={data.isExportingExcel}
       onCopyLink={data.copyEmployeeLink}
-      onExportEmployeeExcel={data.handleExportEmployee}
+      onExportEmployeePdf={data.handleExportEmployee}
       onRegenerateSlug={data.regenerateSlug}
       onSaveSalaryEdit={data.saveSalaryEdit}
     />

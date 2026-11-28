@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle, Download, ExternalLink, FileSpreadsheet, Share2, X } from 'lucide-react';
+import { AlertTriangle, Download, ExternalLink, FileSpreadsheet, FileText, Share2, X } from 'lucide-react';
 import Modal from './Modal';
 import {
   getInAppName,
@@ -53,7 +53,7 @@ function OpenExternallyAction({ compact = false }) {
 /**
  * Hỗ trợ khi trang được mở trong trình duyệt nhúng của Zalo/Facebook/Messenger...:
  * 1. Thanh cảnh báo ở đầu trang + nút mở bằng Chrome (Android) / hướng dẫn mở Safari (iPhone)
- * 2. Hộp "Lưu / Chia sẻ file" khi xuất Excel — người dùng bấm nút để mở bảng chia sẻ của máy
+ * 2. Hộp "Lưu / Chia sẻ file" khi xuất Excel / phiếu lương PDF — người dùng bấm nút để mở bảng chia sẻ của máy
  */
 export default function InAppBrowserHelper() {
   const inApp = useIsInAppBrowser();
@@ -79,7 +79,8 @@ export default function InAppBrowserHelper() {
     }
   };
 
-  const file = offered ? new File([offered.blob], offered.fileName, { type: XLSX_MIME }) : null;
+  const isPdf = /\.pdf$/i.test(offered?.fileName || '');
+  const file = offered ? new File([offered.blob], offered.fileName, { type: offered.blob.type || XLSX_MIME }) : null;
   const canShare = !!file && typeof navigator !== 'undefined' && !!navigator.canShare?.({ files: [file] });
 
   const handleShare = async () => {
@@ -99,7 +100,7 @@ export default function InAppBrowserHelper() {
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
             <div className="flex-1 min-w-0 text-xs leading-relaxed">
               <p>
-                Đang mở trong <b>{getInAppName()}</b> — có thể không tải được file Excel.
+                Đang mở trong <b>{getInAppName()}</b> — có thể không tải được file Excel / PDF.
               </p>
               <div className="mt-1.5">
                 <OpenExternallyAction compact />
@@ -120,9 +121,9 @@ export default function InAppBrowserHelper() {
       <Modal
         isOpen={!!offered}
         onClose={() => setOffered(null)}
-        title="File Excel đã sẵn sàng"
+        title={isPdf ? 'Phiếu lương PDF đã sẵn sàng' : 'File Excel đã sẵn sàng'}
         subtitle={offered?.fileName}
-        icon={<FileSpreadsheet className="w-5 h-5" />}
+        icon={isPdf ? <FileText className="w-5 h-5" /> : <FileSpreadsheet className="w-5 h-5" />}
       >
         <div className="space-y-3">
           {canShare && (
@@ -135,7 +136,7 @@ export default function InAppBrowserHelper() {
                 <Share2 className="w-4 h-4" /> Lưu / Chia sẻ file
               </button>
               <p className="text-xs text-slate-500 text-center">
-                Chọn <b>{isIOS() ? 'Lưu vào Tệp' : 'Lưu'}</b> để lưu về máy, hoặc gửi thẳng qua Zalo / mở bằng Excel.
+                Chọn <b>{isIOS() ? 'Lưu vào Tệp' : 'Lưu'}</b> để lưu về máy, hoặc gửi thẳng qua Zalo / mở bằng {isPdf ? 'ứng dụng xem PDF' : 'Excel'}.
               </p>
             </>
           )}

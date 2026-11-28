@@ -5,15 +5,31 @@ import { HandCoins } from 'lucide-react';
 import Modal from '../common/Modal';
 import FormField, { DayOfMonthSelect, defaultDateForMonth, inputClass, primaryButtonClass } from '../common/FormField';
 
-/** Mount khi mở (xem page.js) nên form luôn khởi tạo lại theo tháng đang chọn */
-export default function AdvanceModal({ onClose, employees, selectedMonth, onAddAdvance }) {
-  const [form, setForm] = useState({
-    employeeId: employees[0]?.id || '',
-    date: defaultDateForMonth(selectedMonth),
-    type: 'advance',
-    amount: '',
-    note: '',
-  });
+/**
+ * Thêm mới (item = null) hoặc sửa 1 khoản ứng/trừ (item = khoản đang sửa).
+ * Mount khi mở (xem page.js) nên form luôn khởi tạo lại theo tháng đang chọn / khoản đang sửa.
+ */
+export default function AdvanceModal({ onClose, employees, selectedMonth, item = null, onSave }) {
+  const isEdit = Boolean(item);
+  // Khoản đang sửa giữ nguyên tháng của nó
+  const monthKey = item?.month || selectedMonth;
+  const [form, setForm] = useState(() =>
+    item
+      ? {
+          employeeId: item.employeeId,
+          date: item.date || defaultDateForMonth(monthKey),
+          type: item.type || 'advance',
+          amount: String(item.amount ?? ''),
+          note: item.note || '',
+        }
+      : {
+          employeeId: employees[0]?.id || '',
+          date: defaultDateForMonth(monthKey),
+          type: 'advance',
+          amount: '',
+          note: '',
+        }
+  );
   const [isSaving, setIsSaving] = useState(false);
   const set = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
@@ -21,15 +37,15 @@ export default function AdvanceModal({ onClose, employees, selectedMonth, onAddA
     e.preventDefault();
     setIsSaving(true);
     try {
-      await onAddAdvance(form);
-      onClose();
+      const ok = await onSave(form);
+      if (ok !== false) onClose();
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <Modal onClose={onClose} title="Nhập ứng lương / tiền ảnh" icon={<HandCoins className="w-5 h-5" />}>
+    <Modal onClose={onClose} title={isEdit ? 'Sửa khoản ứng / tiền ảnh' : 'Nhập ứng lương / tiền ảnh'} icon={<HandCoins className="w-5 h-5" />}>
       <form onSubmit={handleSubmit} className="space-y-3.5">
         <FormField label="Nhân viên">
           <select value={form.employeeId} onChange={set('employeeId')} className={inputClass}>
@@ -51,7 +67,7 @@ export default function AdvanceModal({ onClose, employees, selectedMonth, onAddA
           </FormField>
           <FormField label="Ngày">
             <DayOfMonthSelect
-              monthKey={selectedMonth}
+              monthKey={monthKey}
               value={form.date}
               onChange={(date) => setForm((prev) => ({ ...prev, date }))}
             />
@@ -69,7 +85,7 @@ export default function AdvanceModal({ onClose, employees, selectedMonth, onAddA
             onChange={set('amount')}
             className={`${inputClass} text-base font-extrabold`}
             required
-            autoFocus
+            autoFocus={!isEdit}
           />
         </FormField>
 
@@ -84,7 +100,7 @@ export default function AdvanceModal({ onClose, employees, selectedMonth, onAddA
         </FormField>
 
         <button type="submit" disabled={isSaving} className={primaryButtonClass}>
-          {isSaving ? 'Đang lưu...' : 'Lưu & cập nhật phiếu lương'}
+          {isSaving ? 'Đang lưu...' : isEdit ? 'Lưu thay đổi' : 'Lưu & cập nhật phiếu lương'}
         </button>
       </form>
     </Modal>

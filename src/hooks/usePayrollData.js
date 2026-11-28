@@ -28,8 +28,10 @@ import {
   saveAttendanceDoc,
   saveBatchAttendanceDoc,
   saveAdvanceDoc,
+  updateAdvanceDoc,
   deleteAdvanceDoc,
   saveExpenseDoc,
+  updateExpenseDoc,
   deleteExpenseDoc,
   saveEmployeeDoc,
   updateEmployeeSlugDoc,
@@ -37,7 +39,7 @@ import {
   updateEmployeeSalaryDoc,
   importLegacyDataDocs,
 } from '../lib/firestoreService';
-import { exportWorkshopExcel, exportEmployeeExcel, getExportMonthKeys } from '../lib/exportExcel';
+import { exportWorkshopExcel, getExportMonthKeys } from '../lib/exportExcel';
 import { useToast } from './useToast';
 import { useTodayInfo } from './useTodayInfo';
 
@@ -273,6 +275,24 @@ export function usePayrollData() {
     [selectedMonth, persist]
   );
 
+  /** Sửa khoản ứng/trừ (giữ nguyên tháng của khoản đó) */
+  const updateAdvance = useCallback(
+    async (id, { employeeId, date, type, amount, note }) => {
+      const numericAmount = parseMoneyInput(amount);
+      if (numericAmount <= 0) return false;
+      const changes = {
+        employeeId,
+        date,
+        type,
+        amount: numericAmount,
+        note: note?.trim() || ADVANCE_TYPE_LABEL[type] || 'Khoản trừ',
+      };
+      setAdvances((prev) => prev.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+      return persist(() => updateAdvanceDoc(id, changes), 'Đã cập nhật khoản mục & phiếu lương');
+    },
+    [persist]
+  );
+
   const deleteAdvance = useCallback(
     async (id) => {
       setAdvances((prev) => prev.filter((item) => item.id !== id));
@@ -302,6 +322,27 @@ export function usePayrollData() {
       await persist(() => saveExpenseDoc(entry), 'Đã ghi nhận khoản chi tiêu');
     },
     [selectedMonth, persist]
+  );
+
+  /** Sửa khoản chi (giữ nguyên tháng của khoản đó) */
+  const updateExpense = useCallback(
+    async (id, { date, employeeId, payerId, category, note, amount, reimburse }) => {
+      const numericAmount = parseMoneyInput(amount);
+      if (numericAmount <= 0) return false;
+      const changes = {
+        date,
+        employeeId,
+        buyerId: employeeId,
+        payerId,
+        category,
+        note: note?.trim() || category,
+        amount: numericAmount,
+        reimburse: employeeId === 'fund' ? false : Boolean(reimburse),
+      };
+      setExpenses((prev) => prev.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+      return persist(() => updateExpenseDoc(id, changes), 'Đã cập nhật khoản chi');
+    },
+    [persist]
   );
 
   const deleteExpense = useCallback(
@@ -477,12 +518,13 @@ export function usePayrollData() {
     [runExport, selectedMonth, employees, attendance, advances, expenses]
   );
 
+  /** Phiếu lương PDF của 1 nhân viên cho tháng đang chọn */
   const handleExportEmployee = useCallback(
     (emp) =>
-      runExport(
-        () => exportEmployeeExcel(emp, selectedMonth, attendance, advances, expenses), // chỉ tháng đang chọn
-        'Có lỗi khi xuất Excel cá nhân, vui lòng thử lại!'
-      ),
+      runExport(async () => {
+        const { exportPayslipPdf } = await import('../lib/payslip/exportPayslipPdf');
+        return exportPayslipPdf(emp, selectedMonth, attendance, advances, expenses);
+      }, 'Có lỗi khi xuất phiếu lương PDF, vui lòng thử lại!'),
     [runExport, selectedMonth, attendance, advances, expenses]
   );
 
@@ -564,8 +606,10 @@ export function usePayrollData() {
     setAttendanceValue,
     quickMarkAllToday,
     addAdvance,
+    updateAdvance,
     deleteAdvance,
     addExpense,
+    updateExpense,
     deleteExpense,
     addEmployee,
     saveSalaryEdit,

@@ -5,6 +5,20 @@ import { FileSpreadsheet, Download, Loader2 } from 'lucide-react';
 import Modal from '../common/Modal';
 import { formatMonthLabel } from '../../lib/payroll';
 
+const BADGE_CLASS = {
+  PDF: 'bg-rose-100 text-rose-700',
+  Excel: 'bg-emerald-100 text-emerald-800',
+};
+
+function FormatBadge({ label }) {
+  if (!label) return null;
+  return (
+    <span className={`px-1.5 py-px rounded-md text-[10px] font-extrabold ${BADGE_CLASS[label] || 'bg-slate-100 text-slate-700'}`}>
+      {label}
+    </span>
+  );
+}
+
 /**
  * Hộp chọn phạm vi xuất Excel: chỉ tháng đang chọn ('single') hoặc tất cả các tháng có dữ liệu trong năm ('all').
  * Dùng cho bảng lương tổng (admin) và phiếu lương cá nhân (trang nhân viên) — chỉ khác tiêu đề & mô tả.
@@ -19,6 +33,9 @@ export default function ExportAllModal({
   subtitle = 'Chỉ admin • Định dạng màu theo mẫu Lab Hung Decor',
   singleDescription = 'Bảng chấm công, chi tiết lương từng người, bảng chi tiêu & đổ xăng',
   allDescription = (count) => `${count} sheet, mỗi tháng 1 sheet`,
+  icon = <FileSpreadsheet className="w-5 h-5" />,
+  singleBadge = 'Excel',
+  allBadge = 'Excel',
 }) {
   const first = exportMonthKeys[0];
   const last = exportMonthKeys[exportMonthKeys.length - 1];
@@ -44,7 +61,7 @@ export default function ExportAllModal({
     'w-full p-3.5 rounded-2xl border text-left flex items-center justify-between gap-3 transition disabled:opacity-60 cursor-pointer';
 
   return (
-    <Modal onClose={onClose} title={title} subtitle={subtitle} icon={<FileSpreadsheet className="w-5 h-5" />}>
+    <Modal onClose={onClose} title={title} subtitle={subtitle} icon={icon}>
       <div className="space-y-2.5">
         <button
           type="button"
@@ -53,7 +70,10 @@ export default function ExportAllModal({
           className={`${optionClass} border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50`}
         >
           <div>
-            <div className="text-sm font-extrabold text-slate-900">Chỉ {selectedMonthDisplayLabel}</div>
+            <div className="flex flex-wrap items-center gap-1.5 text-sm font-extrabold text-slate-900">
+              Chỉ {selectedMonthDisplayLabel}
+              <FormatBadge label={singleBadge} />
+            </div>
             <div className="text-xs text-slate-500 mt-0.5">{singleDescription}</div>
           </div>
           {iconFor('single', 'text-emerald-600')}
@@ -66,7 +86,10 @@ export default function ExportAllModal({
           className={`${optionClass} border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/70`}
         >
           <div>
-            <div className="text-sm font-extrabold text-emerald-950">Tất cả các tháng ({rangeLabel})</div>
+            <div className="flex flex-wrap items-center gap-1.5 text-sm font-extrabold text-emerald-950">
+              Tất cả các tháng ({rangeLabel})
+              <FormatBadge label={allBadge} />
+            </div>
             <div className="text-xs text-emerald-800/80 mt-0.5">{allDescription(exportMonthKeys.length)}</div>
           </div>
           {iconFor('all', 'text-emerald-700')}

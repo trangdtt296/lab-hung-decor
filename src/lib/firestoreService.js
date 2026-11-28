@@ -61,6 +61,12 @@ export const saveAdvanceDoc = async (advanceItem) => {
   });
 };
 
+/** Sửa khoản ứng/trừ: chỉ ghi các trường được sửa, giữ nguyên createdAt */
+export const updateAdvanceDoc = async (id, changes) => {
+  if (!isFirebaseConfigured || !firebaseDb) return;
+  await updateDoc(doc(firebaseDb, 'advances', id), { ...changes, updatedAt: serverTimestamp() });
+};
+
 export const deleteAdvanceDoc = async (id) => {
   if (!isFirebaseConfigured || !firebaseDb) return;
   await deleteDoc(doc(firebaseDb, 'advances', id));
@@ -72,6 +78,12 @@ export const saveExpenseDoc = async (expenseItem) => {
     ...expenseItem,
     createdAt: serverTimestamp(),
   });
+};
+
+/** Sửa khoản chi: chỉ ghi các trường được sửa, giữ nguyên createdAt */
+export const updateExpenseDoc = async (id, changes) => {
+  if (!isFirebaseConfigured || !firebaseDb) return;
+  await updateDoc(doc(firebaseDb, 'expenses', id), { ...changes, updatedAt: serverTimestamp() });
 };
 
 export const deleteExpenseDoc = async (id) => {

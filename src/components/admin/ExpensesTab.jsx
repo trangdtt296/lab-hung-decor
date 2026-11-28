@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Plus, Fuel, Package, Truck, Utensils, Receipt, Trash2 } from 'lucide-react';
+import { Plus, Fuel, Package, Truck, Utensils, Receipt, Trash2, Pencil, Users, X, Landmark } from 'lucide-react';
 import { formatVND } from '../../lib/payroll';
 import { EXPENSE_CATEGORIES } from '../modals/ExpenseModal';
 import ConfirmButton from '../common/ConfirmButton';
+import EmployeeAvatar from '../common/EmployeeAvatar';
 
 export const CATEGORY_STYLE = {
   'Đổ xăng': { Icon: Fuel, className: 'bg-indigo-100 text-indigo-700' },
@@ -14,6 +15,82 @@ export const CATEGORY_STYLE = {
 };
 export const DEFAULT_CATEGORY_STYLE = { Icon: Receipt, className: 'bg-slate-100 text-slate-700' };
 
+/** Người mua của 1 khoản chi ('fund' = Quỹ chung) */
+const buyerIdOf = (item) => item.buyerId || item.employeeId || 'unknown';
+
+/**
+ * Tổng chi theo từng người mua (sắp xếp giảm dần). Bấm 1 người để chỉ xem các khoản người đó mua.
+ * Tính trên danh mục đang lọc, VD chọn "Đổ xăng" → biết mỗi người đổ xăng hết bao nhiêu.
+ */
+function BuyerSummary({ rows, total, activeBuyer, onSelect, filterLabel }) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3 sm:p-3.5">
+      <div className="flex items-center justify-between gap-2 mb-2 min-h-7">
+        <h2 className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900 min-w-0">
+          <Users className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="truncate">
+            Chi theo người mua
+            {filterLabel && <span className="font-semibold text-slate-400"> · {filterLabel}</span>}
+          </span>
+        </h2>
+        {activeBuyer && (
+          <button
+            type="button"
+            onClick={() => onSelect(null)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-[11px] font-bold text-slate-600 cursor-pointer shrink-0"
+          >
+            <X className="w-3 h-3" />
+            Bỏ lọc
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+        {rows.map((row) => {
+          const isActive = activeBuyer === row.id;
+          const share = total > 0 ? Math.round((row.amount / total) * 100) : 0;
+          return (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => onSelect(isActive ? null : row.id)}
+              aria-pressed={isActive}
+              className={`w-full flex items-center gap-2.5 p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                isActive
+                  ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/15'
+                  : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100'
+              } ${activeBuyer && !isActive ? 'opacity-60' : ''}`}
+            >
+              {row.id === 'fund' ? (
+                <span className="w-8 h-8 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                  <Landmark className="w-4 h-4" />
+                </span>
+              ) : (
+                <EmployeeAvatar name={row.name} size="sm" />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-900 truncate">{row.name}</span>
+                  <span className="text-xs font-black text-slate-900 tabular-nums whitespace-nowrap">{formatVND(row.amount)}</span>
+                </span>
+                <span className="mt-1 flex items-center gap-2">
+                  <span className="h-1.5 flex-1 rounded-full bg-slate-200 overflow-hidden">
+                    <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${share}%` }} />
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500 tabular-nums whitespace-nowrap">
+                    {row.count} khoản · {share}%
+                  </span>
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function ExpensesTab({
   expenses,
   employees,
@@ -22,17 +99,41 @@ export default function ExpensesTab({
   totalReimbursements,
   totalFuel,
   onOpenAddExpense,
+  onEditExpense,
   onDeleteExpense,
 }) {
   const [filter, setFilter] = useState('all');
+  const [buyerFilter, setBuyerFilter] = useState(null);
 
   const monthExpenses = useMemo(() => expenses.filter((e) => e.month === selectedMonth), [expenses, selectedMonth]);
-  const visible = filter === 'all' ? monthExpenses : monthExpenses.filter((e) => e.category === filter);
-  const buyerName = (item) => {
-    const id = item.buyerId || item.employeeId;
-    if (id === 'fund') return 'Quỹ chung';
-    return employees.find((e) => e.id === id)?.name || id;
-  };
+  const byCategory = useMemo(
+    () => (filter === 'all' ? monthExpenses : monthExpenses.filter((e) => e.category === filter)),
+    [monthExpenses, filter]
+  );
+  const nameOf = (id) => (id === 'fund' ? 'Quỹ chung' : employees.find((e) => e.id === id)?.name || 'Nhân viên đã nghỉ');
+  const buyerName = (item) => nameOf(buyerIdOf(item));
+
+  const buyerRows = useMemo(() => {
+    const map = new Map();
+    byCategory.forEach((item) => {
+      const id = buyerIdOf(item);
+      const row = map.get(id) || { id, amount: 0, count: 0 };
+      row.amount += Number(item.amount) || 0;
+      row.count += 1;
+      map.set(id, row);
+    });
+    return [...map.values()]
+      .map((row) => ({
+        ...row,
+        name: row.id === 'fund' ? 'Quỹ chung' : employees.find((e) => e.id === row.id)?.name || 'Nhân viên đã nghỉ',
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [byCategory, employees]);
+  const categoryTotal = buyerRows.reduce((sum, r) => sum + r.amount, 0);
+
+  // Người đang lọc không còn khoản nào (đổi tháng / danh mục) thì coi như bỏ lọc
+  const activeBuyer = buyerRows.some((r) => r.id === buyerFilter) ? buyerFilter : null;
+  const visible = activeBuyer ? byCategory.filter((e) => buyerIdOf(e) === activeBuyer) : byCategory;
 
   const stats = [
     { label: 'Tổng chi', value: totalExpenses, color: 'text-slate-900' },
@@ -51,6 +152,14 @@ export default function ExpensesTab({
           </div>
         ))}
       </div>
+
+      <BuyerSummary
+        rows={buyerRows}
+        total={categoryTotal}
+        activeBuyer={activeBuyer}
+        onSelect={setBuyerFilter}
+        filterLabel={filter === 'all' ? '' : filter}
+      />
 
       <div className="flex items-center justify-between gap-2">
         {/* Mobile: chip cuộn ngang thay vì xuống nhiều dòng */}
@@ -107,10 +216,19 @@ export default function ExpensesTab({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-sm font-extrabold text-slate-900 tabular-nums whitespace-nowrap">
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <span className="text-sm font-extrabold text-slate-900 tabular-nums whitespace-nowrap mr-1">
                     {formatVND(item.amount)}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => onEditExpense(item)}
+                    aria-label="Sửa khoản chi"
+                    title="Sửa"
+                    className="h-9 w-9 rounded-xl text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 inline-flex items-center justify-center cursor-pointer"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
                   <ConfirmButton
                     onConfirm={() => onDeleteExpense(item.id)}
                     aria-label="Xoá khoản chi"

@@ -211,6 +211,15 @@ export const isEmployeeInMonth = (emp, monthKey, data, currentMonthKey = getCurr
   return employeeHasMonthData(emp, monthKey, data);
 };
 
+/**
+ * Danh sách cho ô chọn nhân viên khi SỬA 1 khoản cũ: nhân viên đang làm + người được khoản đó nhắc tới
+ * (có thể đã nghỉ), để ô chọn không bị nhảy sang người khác.
+ */
+export const withReferencedEmployees = (activeEmployees, allEmployees, ids) => {
+  const extra = allEmployees.filter((e) => ids.includes(e.id) && !activeEmployees.some((a) => a.id === e.id));
+  return [...activeEmployees, ...extra];
+};
+
 /** Lương cơ bản hiện hành = mốc lương mới nhất */
 export const latestBaseSalary = (salaryByMonth = {}, fallback = 0) => {
   const keys = Object.keys(salaryByMonth).sort();
